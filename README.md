@@ -32,6 +32,20 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 
 ## 📦 Cài đặt
 
+### Cách 1: Tải bản cài sẵn
+
+1. Tải `SenKey-x.y.zip` ở trang [**Releases**](https://github.com/tdHuy22/SenKey/releases/latest), giải nén rồi kéo `SenKey.app` vào **Applications**.
+2. SenKey chưa được Apple công chứng (notarize), nên lần đầu mở macOS sẽ chặn. Chọn **một** trong hai cách:
+   - Mở SenKey, bấm **Xong**, rồi vào Cài đặt hệ thống → **Quyền riêng tư & Bảo mật**, kéo xuống dưới và bấm **Vẫn mở** (*Open Anyway*).
+   - Hoặc chạy lệnh:
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/SenKey.app
+     ```
+
+### Cách 2: Build từ mã nguồn
+
+Chỉ cần Xcode Command Line Tools (`xcode-select --install`).
+
 ```bash
 git clone https://github.com/tdHuy22/SenKey.git
 cd SenKey
@@ -39,13 +53,13 @@ cd SenKey
 ./install.sh     # build, chép vào /Applications, mở app
 ```
 
-Sau đó:
+### Sau khi cài
 
 1. **Cấp quyền:** Cài đặt hệ thống → Quyền riêng tư & Bảo mật → **Trợ năng** → bật **SenKey**.
 2. **Tắt bộ gõ khác:** Bàn phím → Nguồn đầu vào → chỉ để lại **ABC**, để không bị xử lý hai lần.
 3. Thấy chữ **Vi** trên menu bar là xong. 🎉
 
-Cập nhật sau khi sửa code: chạy lại `./install.sh`.
+Cập nhật: tải bản mới ở Releases, hoặc chạy lại `./install.sh` nếu build từ mã nguồn.
 
 > [!WARNING]
 > **Không bật/tắt quyền Trợ năng của SenKey khi app đang chạy.** Trên một số bản macOS, thu hồi quyền của một app
