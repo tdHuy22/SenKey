@@ -1,12 +1,12 @@
 #!/bin/zsh
-# Tạo chứng chỉ ký mã tự ký "GoViet Dev" trong một keychain riêng (không đụng keychain đăng nhập).
+# Tạo chứng chỉ ký mã tự ký "SenKey Dev" trong một keychain riêng (không đụng keychain đăng nhập).
 # Ký bằng chứng chỉ cố định → macOS nhận ra các bản build là cùng một app → không phải cấp lại quyền Trợ năng.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-NAME="GoViet Dev"
-DIR="$HOME/Library/Application Support/GoViet/signing"
-KEYCHAIN="$DIR/goviet-signing.keychain-db"
+NAME="SenKey Dev"
+DIR="$HOME/Library/Application Support/SenKey/signing"
+KEYCHAIN="$DIR/senkey-signing.keychain-db"
 PASSFILE="$DIR/keychain-password"
 
 if [[ -f "$KEYCHAIN" ]]; then

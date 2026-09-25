@@ -12,7 +12,7 @@ final class LoginItemModel: ObservableObject {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             error = nil
         } catch {
-            self.error = "Không đặt được: \(error.localizedDescription). Hãy chép GoViet.app vào /Applications rồi thử lại."
+            self.error = "Không đặt được: \(error.localizedDescription). Hãy chép SenKey.app vào /Applications rồi thử lại."
         }
         enabled = SMAppService.mainApp.status == .enabled
     }

@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var accessibilityObserver: NSObjectProtocol?
     private var settingsWindow: NSWindow?
 
-    /// Ứng dụng người dùng đang làm việc (không tính chính GoViet).
+    /// Ứng dụng người dùng đang làm việc (không tính chính SenKey).
     private var targetApp: NSRunningApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.attributedTitle = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .bold),
         ])
-        button.toolTip = "GoViet"
+        button.toolTip = "SenKey"
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -172,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(checkbox("Tự khôi phục từ tiếng Anh", settings.autoRestoreEnglish, #selector(toggleAutoRestore)))
         menu.addItem(.separator())
         menu.addItem(item("Cài đặt & danh sách ứng dụng…", #selector(openSettings), key: ","))
-        menu.addItem(item("Thoát GoViet", #selector(quit), key: "q"))
+        menu.addItem(item("Thoát SenKey", #selector(quit), key: "q"))
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
@@ -232,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 560),
                                   styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "GoViet – Cài đặt"
+            window.title = "SenKey – Cài đặt"
             window.contentViewController = NSHostingController(rootView: SettingsView(settings: settings, loginItem: LoginItemModel()))
             window.isReleasedWhenClosed = false
             window.center()

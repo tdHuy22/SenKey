@@ -52,7 +52,7 @@ enum InputMethodChoice: String, Codable, CaseIterable, Identifiable {
 
 final class Settings: ObservableObject {
     static let shared = Settings()
-    private static let key = "GoViet.settings.v1"
+    private static let key = "SenKey.settings.v1"
 
     /// Ứng dụng có ô tự gợi ý (autocomplete) — dễ bị lỗi lặp chữ nếu không xử lý riêng.
     static let autocompleteApps: Set<String> = [
@@ -74,7 +74,9 @@ final class Settings: ObservableObject {
 
     private init() {
         var s = StoredSettings()
-        if let data = UserDefaults.standard.data(forKey: Self.key),
+        // Lần đầu chạy sau khi đổi tên: lấy cài đặt cũ của GoViet (vn.goviet.app).
+        let legacy = UserDefaults(suiteName: "vn.goviet.app")?.data(forKey: "GoViet.settings.v1")
+        if let data = UserDefaults.standard.data(forKey: Self.key) ?? legacy,
            let decoded = try? JSONDecoder().decode(StoredSettings.self, from: data) {
             s = decoded
         }

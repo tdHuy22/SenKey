@@ -64,7 +64,7 @@ final class KeyboardHook {
     private var listenTap: CFMachPort?
     private var tapRunLoop: CFRunLoop?
 
-    private let contextQueue = DispatchQueue(label: "vn.goviet.context", qos: .userInitiated)
+    private let contextQueue = DispatchQueue(label: "vn.senkey.context", qos: .userInitiated)
 
     /// Gọi trên luồng chính khi người dùng nhấn phím tắt đảo Việt/Anh, kèm bundle ID của app đang nhận phím.
     var onToggle: ((String?) -> Void)?
@@ -118,7 +118,7 @@ final class KeyboardHook {
             ready.signal()
             CFRunLoopRun()  // kết thúc khi stop() gọi CFRunLoopStop
         }
-        thread.name = "GoViet.EventTap"
+        thread.name = "SenKey.EventTap"
         thread.qualityOfService = .userInteractive
         thread.start()
         ready.wait()

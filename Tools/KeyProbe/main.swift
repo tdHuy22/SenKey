@@ -1,6 +1,6 @@
 import AppKit
 
-// KeyProbe: ghi lại mọi sự kiện phím mà ô chữ nhận được, để chẩn đoán GoViet.
+// KeyProbe: ghi lại mọi sự kiện phím mà ô chữ nhận được, để chẩn đoán SenKey.
 final class Delegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     let input = NSTextView()
@@ -44,7 +44,7 @@ final class Delegate: NSObject, NSApplicationDelegate {
             let line = String(format: "%7.3f %@ key=%3d chars=%@ %@ flags=0x%llx repeat=%d src=%lld synth=%@",
                               e.timestamp - t0, e.type == .keyDown ? "DOWN" : "up  ", e.keyCode,
                               "\"\(e.characters ?? "")\"", chars, UInt64(e.modifierFlags.rawValue),
-                              e.isARepeat ? 1 : 0, src, user != 0 ? "GoViet" : "-")
+                              e.isARepeat ? 1 : 0, src, user != 0 ? "SenKey" : "-")
             self.append(line)
             DispatchQueue.main.async { self.append("        → ô chữ: \"\(self.input.string)\"") }
             return e
