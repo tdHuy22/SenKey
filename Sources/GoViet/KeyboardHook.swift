@@ -50,9 +50,14 @@ final class KeyboardHook {
     // Chỉ dùng trên luồng bắt phím
     private let engine = VietnameseEngine()
     private let source = CGEventSource(stateID: .privateState)
-    private var seenResetGeneration = 0
+    private var seenResetGeneration = -1
+    private var config: HookConfig
+    private var contextID: String?
     private var modifierHotkeyArmed = false
     private var lastContextRequest: TimeInterval = 0
+
+    // Chỉ dùng trên contextQueue
+    private var lastContextRead: TimeInterval = 0
 
     // Chỉ dùng trên luồng chính
     private var keyTap: CFMachPort?
@@ -66,6 +71,7 @@ final class KeyboardHook {
 
     init(config: HookConfig) {
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        self.config = config
         shared = OSAllocatedUnfairLock(initialState: Shared(config: config, contextBundleID: front,
                                                             frontmostBundleID: front))
     }
@@ -117,7 +123,7 @@ final class KeyboardHook {
         thread.start()
         ready.wait()
         tapRunLoop = runLoop
-        requestContextRefresh()
+        requestContextRefresh(fromTapThread: false)
         return true
     }
 
@@ -148,7 +154,7 @@ final class KeyboardHook {
             $0.contextBundleID = bundleID
             $0.resetGeneration += 1
         }
-        requestContextRefresh()
+        requestContextRefresh(fromTapThread: false)
     }
 
     // MARK: - Xử lý sự kiện (luồng bắt phím)
@@ -188,11 +194,8 @@ final class KeyboardHook {
         if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticMarker { return pass }
         modifierHotkeyArmed = false
 
-        let (config, contextID, generation) = shared.withLock { ($0.config, $0.contextBundleID, $0.resetGeneration) }
-        if generation != seenResetGeneration {
-            seenResetGeneration = generation
-            engine.reset()
-        }
+        syncShared()
+        let config = self.config, contextID = self.contextID
 
         let flags = event.flags.intersection(Self.modifierMask)
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -252,6 +255,17 @@ final class KeyboardHook {
         return nil
     }
 
+    /// Chỉ chép cài đặt/ngữ cảnh khi chúng đổi (mọi thay đổi đều tăng resetGeneration),
+    /// nên mỗi phím chỉ tốn một lần khoá + so sánh số nguyên.
+    private func syncShared() {
+        let seen = seenResetGeneration
+        guard let snap = shared.withLock({ s -> (HookConfig, String?, Int)? in
+            s.resetGeneration == seen ? nil : (s.config, s.contextBundleID, s.resetGeneration)
+        }) else { return }
+        (config, contextID, seenResetGeneration) = snap
+        engine.reset()
+    }
+
     private func isHotkey(_ hotkey: Hotkey, keyCode: Int64, flags: CGEventFlags) -> Bool {
         switch hotkey {
         case .ctrlShift: return false
@@ -263,8 +277,9 @@ final class KeyboardHook {
 
     /// ⌃⇧: nhấn rồi thả mà không gõ phím nào khác thì mới đảo.
     private func handleModifierHotkey(_ flags: CGEventFlags) {
-        let (hotkey, contextID) = shared.withLock { ($0.config.hotkey, $0.contextBundleID) }
-        guard hotkey == .ctrlShift else { return }
+        syncShared()
+        guard config.hotkey == .ctrlShift else { return }
+        let contextID = self.contextID
         if flags == [.maskControl, .maskShift] {
             modifierHotkeyArmed = true
         } else if flags.isEmpty {
@@ -281,12 +296,17 @@ final class KeyboardHook {
     // MARK: - Ngữ cảnh ứng dụng
 
     /// Đọc ứng dụng đang nhận phím (Spotlight, Raycast… không phải frontmost app) ở hàng đợi nền.
-    private func requestContextRefresh(after delay: TimeInterval = 0) {
-        if Thread.current.name == "GoViet.EventTap" {
+    /// Nhiều yêu cầu dồn dập (giữ phím mũi tên, click liên tục) được gộp: trong 80 ms chỉ đọc AX một lần,
+    /// để app đang treo (mỗi lần đọc chờ tới 0,1 s) không làm hàng đợi dồn ứ và ngữ cảnh bị trễ.
+    private func requestContextRefresh(after delay: TimeInterval = 0, fromTapThread: Bool = true) {
+        if fromTapThread {
             lastContextRequest = ProcessInfo.processInfo.systemUptime
         }
         contextQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - self.lastContextRead < 0.08 { return }
+            self.lastContextRead = now
             let focused = Self.focusedBundleID()
             self.shared.withLock { s in
                 let id = focused ?? s.frontmostBundleID

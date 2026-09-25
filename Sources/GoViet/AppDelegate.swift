@@ -60,10 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ = AXIsProcessTrustedWithOptions(options)
         permissionTimer?.invalidate()
         // Kiểm tra quyền mỗi giây (AXIsProcessTrusted chỉ tốn vài µs), có dung sai để macOS gộp lần thức dậy.
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             self?.checkPermission()
         }
-        permissionTimer?.tolerance = 0.3
+        timer.tolerance = 0.3
+        // .common: vẫn chạy khi menu trên menu bar đang mở (run loop ở chế độ event tracking),
+        // nếu không, mất quyền đúng lúc mở menu thì tap không được gỡ.
+        RunLoop.main.add(timer, forMode: .common)
+        permissionTimer = timer
         if accessibilityObserver == nil {
             // Hệ thống phát thông báo này khi quyền Trợ năng thay đổi → phản ứng tức thì.
             accessibilityObserver = DistributedNotificationCenter.default().addObserver(
