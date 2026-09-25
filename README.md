@@ -12,7 +12,7 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 ![Tests](https://img.shields.io/badge/tests-77%2F77%20passing-2ea44f)
 ![Speed](https://img.shields.io/badge/engine-~1.2%C2%B5s%2Fph%C3%ADm-orange)
 
-[Cài đặt](#-cài-đặt) · [Sử dụng](#-sử-dụng) · [Cách hoạt động](#-vì-sao-ổn-định-hơn) · [Gỡ cài đặt](#-gỡ-cài-đặt) · [Donate](#-nạp-token-cho-tác-giả)
+[Cài đặt](#-cài-đặt) · [Sử dụng](#-sử-dụng) · [Cách hoạt động](#-vì-sao-ổn-định-hơn) · [Gỡ cài đặt](#️-gỡ-cài-đặt) · [Donate](#-nạp-token-cho-tác-giả)
 
 </div>
 
@@ -104,10 +104,10 @@ Phím tắt có thể đổi sang **⌥Z**, **⌃Space** hoặc **⌘⇧Space** 
 
 ```mermaid
 flowchart LR
-    A[Phím bấm] --> B[CGEventTap]
-    B --> C{VietEngine}
-    C -- không đổi gì --> D[Giữ nguyên phím gốc]
-    C -- có thay đổi --> E[Gửi phần chênh lệch<br/>⌫ ⌫ + ệt]
+    A[Phím bấm] --> B[SenKey]
+    B --> C{Chữ có đổi?}
+    C -- Không --> D[Giữ phím gốc]
+    C -- Có --> E[Xoá 2, gõ ệt]
 ```
 
 - **Không dùng marked text.** Mỗi phím chỉ gửi phần chênh lệch: `viet` + `j` → xoá 2 ký tự, gõ `ệt`.
