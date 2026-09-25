@@ -11,6 +11,7 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 ![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-4B8BBE)
 ![Tests](https://img.shields.io/badge/tests-77%2F77%20passing-2ea44f)
 ![Speed](https://img.shields.io/badge/engine-~1.2%C2%B5s%2Fph%C3%ADm-orange)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [Cài đặt](#-cài-đặt) · [Sử dụng](#-sử-dụng) · [Cách hoạt động](#-vì-sao-ổn-định-hơn) · [Gỡ cài đặt](#️-gỡ-cài-đặt) · [Donate](#-nạp-token-cho-tác-giả)
 
@@ -147,11 +148,16 @@ SenKey/
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
 ├── build.sh · install.sh · uninstall.sh · make-cert.sh
 ├── get.sh · package.sh                     # cài bằng một lệnh · đóng gói bản phát hành
+└── LICENSE                                 # MIT
 ```
 
 Build thủ công: `./build.sh` (dùng `swiftc` trực tiếp, không cần Xcode project hay SwiftPM). Build xong sẽ có file `build/SenKey.app` dạng universal (arm64 + x86_64).
 
 ---
+
+## 📄 Giấy phép
+
+[MIT](LICENSE): tự do dùng, sửa, chia sẻ, kể cả cho mục đích thương mại, miễn là giữ lại thông báo bản quyền.
 
 ## ☕ Nạp token cho tác giả
 
