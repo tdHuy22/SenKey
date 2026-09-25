@@ -38,15 +38,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# Hardened runtime (--options runtime): chặn nạp thư viện lạ vào tiến trình đang có quyền đọc phím.
 # Ký bằng chứng chỉ "GoViet Dev" (tạo bằng ./make-cert.sh) để giữ quyền Trợ năng qua các lần build.
 # Chưa có chứng chỉ thì ký ad-hoc (mỗi lần build phải cấp lại quyền).
 SIGN_DIR="$HOME/Library/Application Support/GoViet/signing"
 SIGN_KEYCHAIN="$SIGN_DIR/goviet-signing.keychain-db"
 if [[ -f "$SIGN_KEYCHAIN" && -f "$SIGN_DIR/keychain-password" ]]; then
   security unlock-keychain -p "$(cat "$SIGN_DIR/keychain-password")" "$SIGN_KEYCHAIN"
-  codesign --force --deep --keychain "$SIGN_KEYCHAIN" --sign "GoViet Dev" "$APP"
+  codesign --force --options runtime --keychain "$SIGN_KEYCHAIN" --sign "GoViet Dev" "$APP"
   echo "✓ Xong: $APP (ký bằng chứng chỉ GoViet Dev)"
 else
-  codesign --force --deep --sign - "$APP"
+  codesign --force --options runtime --sign - "$APP"
   echo "✓ Xong: $APP (ký ad-hoc — chạy ./make-cert.sh để không phải cấp lại quyền mỗi lần build)"
 fi
