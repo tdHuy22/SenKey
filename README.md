@@ -33,7 +33,7 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 ## 📦 Cài đặt
 
 ```bash
-git clone <repo-url> SenKey
+git clone https://github.com/tdHuy22/SenKey.git
 cd SenKey
 ./make-cert.sh   # chỉ cần chạy một lần (khuyên dùng, xem bên dưới)
 ./install.sh     # build, chép vào /Applications, mở app
