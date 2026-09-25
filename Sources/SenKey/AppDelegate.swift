@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var permissionTimer: Timer?
     private var accessibilityObserver: NSObjectProtocol?
     private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
+    private static let onboardedKey = "SenKey.onboarded.v1"
 
     /// Ứng dụng người dùng đang làm việc (không tính chính SenKey).
     private var targetApp: NSRunningApplication?
@@ -51,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         startHookOrWaitForPermission()
         updateStatusIcon()
+        if !AXIsProcessTrusted() || !UserDefaults.standard.bool(forKey: Self.onboardedKey) {
+            showOnboarding()
+        }
     }
 
     // MARK: - Quyền Trợ năng
@@ -85,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var trustedSince: Date?
 
     private func checkPermission() {
+        if onboardingWindow?.isVisible == true { onboardingModel?.refresh() }
         if AXIsProcessTrusted() {
             if trustedSince == nil { trustedSince = Date() }
             if !hook.isInstalled, Date().timeIntervalSince(trustedSince!) >= 1.5 {
@@ -120,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
 
         if !hook.isInstalled {
-            menu.addItem(item("⚠︎ Cần cấp quyền Trợ năng — nhấn để mở", #selector(openAccessibilitySettings)))
+            menu.addItem(item("⚠︎ Cần cấp quyền Trợ năng — nhấn để xem hướng dẫn", #selector(showOnboarding)))
             menu.addItem(.separator())
         }
 
@@ -172,6 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(checkbox("Tự khôi phục từ tiếng Anh", settings.autoRestoreEnglish, #selector(toggleAutoRestore)))
         menu.addItem(.separator())
         menu.addItem(item("Cài đặt & danh sách ứng dụng…", #selector(openSettings), key: ","))
+        menu.addItem(item("Hướng dẫn cài đặt…", #selector(showOnboarding)))
         menu.addItem(item("Thoát SenKey", #selector(quit), key: "q"))
     }
 
@@ -226,6 +233,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openAccessibilitySettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         startHookOrWaitForPermission()
+    }
+
+    // MARK: - Hướng dẫn lần đầu
+
+    private var onboardingModel: OnboardingModel?
+
+    @objc private func showOnboarding() {
+        if onboardingWindow == nil {
+            let model = OnboardingModel()
+            model.onOpenAccessibility = { [weak self] in self?.openAccessibilitySettings() }
+            model.onDone = { [weak self] in
+                UserDefaults.standard.set(true, forKey: Self.onboardedKey)
+                self?.onboardingWindow?.close()
+            }
+            let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable],
+                                  backing: .buffered, defer: false)
+            window.title = "SenKey"
+            window.contentViewController = NSHostingController(
+                rootView: OnboardingView(model: model, loginItem: model.loginItem))
+            window.isReleasedWhenClosed = false
+            // Nổi trên Cài đặt hệ thống để người dùng vừa bật quyền vừa thấy hướng dẫn.
+            window.level = .floating
+            if let screen = NSScreen.main?.visibleFrame {
+                window.setFrameTopLeftPoint(NSPoint(x: screen.maxX - window.frame.width - 24, y: screen.maxY - 24))
+            }
+            onboardingModel = model
+            onboardingWindow = window
+        }
+        onboardingModel?.refresh()
+        NSApp.activate(ignoringOtherApps: true)
+        onboardingWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func openSettings() {

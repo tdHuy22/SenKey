@@ -32,52 +32,60 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 
 ## 📦 Cài đặt
 
-### Cách 1: Tải bản cài sẵn
+### ⚡ Cách nhanh nhất: dán một dòng lệnh (khuyên dùng)
 
-1. Tải `SenKey-x.y.zip` ở trang [**Releases**](https://github.com/tdHuy22/SenKey/releases/latest), giải nén rồi kéo `SenKey.app` vào **Applications**.
-2. SenKey chưa được Apple công chứng (notarize), nên lần đầu mở macOS sẽ chặn. Chọn **một** trong hai cách:
-   - Mở SenKey, bấm **Xong**, rồi vào Cài đặt hệ thống → **Quyền riêng tư & Bảo mật**, kéo xuống dưới và bấm **Vẫn mở** (*Open Anyway*).
-   - Hoặc chạy lệnh:
-     ```bash
-     xattr -dr com.apple.quarantine /Applications/SenKey.app
-     ```
+1. Mở **Terminal**: nhấn **⌘ Command + Space**, gõ `Terminal`, nhấn **Enter**.
+2. Chép dòng dưới đây, dán vào Terminal (**⌘ Command + V**) rồi nhấn **Enter**:
 
-### Cách 2: Build từ mã nguồn
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/tdHuy22/SenKey/main/get.sh | bash
+   ```
+
+3. Cửa sổ **Chào mừng đến với SenKey** hiện ra. Làm theo từng bước trong đó, bước nào xong sẽ có dấu ✓ xanh.
+
+Cách này tự tải bản mới nhất, cài vào **Applications** và mở app. macOS không chặn gì cả.
+**Muốn cập nhật:** chạy lại đúng dòng lệnh trên.
+
+### 💿 Hoặc tải file cài đặt
+
+1. Tải [**SenKey.dmg**](https://github.com/tdHuy22/SenKey/releases/latest/download/SenKey.dmg), mở file, kéo **SenKey** vào thư mục **Applications**.
+2. Mở SenKey trong Applications. Lần đầu macOS sẽ báo *"không thể xác minh nhà phát triển"*, vì SenKey chưa trả phí để Apple công chứng:
+   - Bấm **Xong**.
+   - Vào **Cài đặt hệ thống → Quyền riêng tư & Bảo mật**, kéo xuống dưới cùng, bấm **Vẫn mở** (*Open Anyway*), nhập mật khẩu máy.
+3. Cửa sổ hướng dẫn của SenKey hiện ra. Làm theo từng bước là xong.
+
+### ✅ Cửa sổ hướng dẫn sẽ nhờ bạn
+
+1. **Cho phép SenKey dùng bàn phím:** bấm **Mở Cài đặt**, bật công tắc cạnh **SenKey** trong danh sách **Trợ năng**.
+2. **Không dùng cùng lúc bộ gõ khác:** nếu đang chọn tiếng Việt của Apple hoặc đang mở EVKey, UniKey… thì chuyển về **ABC** hoặc thoát app đó.
+3. **Gõ thử** ngay trong cửa sổ. Thấy chữ **Vi** trên thanh menu (góc trên bên phải màn hình) là xong 🎉
+
+Mở lại cửa sổ này bất cứ lúc nào: bấm **Vi/En** trên thanh menu → **Hướng dẫn cài đặt…**
+
+> [!WARNING]
+> **Đừng tắt quyền Trợ năng của SenKey khi app đang chạy.** Trên một số bản macOS, việc này có thể làm treo bàn phím và chuột.
+> Muốn tắt quyền thì bấm **Vi/En → Thoát SenKey** trước.
+
+<details>
+<summary><b>🛠️ Dành cho lập trình viên: build từ mã nguồn</b></summary>
+
+<br>
 
 Chỉ cần Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/tdHuy22/SenKey.git
 cd SenKey
-./make-cert.sh   # chỉ cần chạy một lần (khuyên dùng, xem bên dưới)
+./make-cert.sh   # chỉ cần chạy một lần
 ./install.sh     # build, chép vào /Applications, mở app
 ```
 
-### Sau khi cài
-
-1. **Cấp quyền:** Cài đặt hệ thống → Quyền riêng tư & Bảo mật → **Trợ năng** → bật **SenKey**.
-2. **Tắt bộ gõ khác:** Bàn phím → Nguồn đầu vào → chỉ để lại **ABC**, để không bị xử lý hai lần.
-3. Thấy chữ **Vi** trên menu bar là xong. 🎉
-
-Cập nhật: tải bản mới ở Releases, hoặc chạy lại `./install.sh` nếu build từ mã nguồn.
-
-> [!WARNING]
-> **Không bật/tắt quyền Trợ năng của SenKey khi app đang chạy.** Trên một số bản macOS, thu hồi quyền của một app
-> đang chặn phím có thể làm treo bàn phím và chuột. Hãy **Thoát SenKey** trước, hoặc chỉ dùng `./install.sh`
-> (script tự thoát app và xoá quyền cũ).
-
-<details>
-<summary><b>🔏 Vì sao nên chạy <code>make-cert.sh</code>?</b></summary>
-
-<br>
-
-Script tạo chứng chỉ tự ký **"SenKey Dev"** trong một keychain riêng tại
+`make-cert.sh` tạo chứng chỉ tự ký **"SenKey Dev"** trong một keychain riêng tại
 `~/Library/Application Support/SenKey/signing/`. Nó không đụng vào keychain đăng nhập và không hỏi mật khẩu máy.
-
 `build.sh` tự dùng chứng chỉ này, nên mọi bản build có **cùng chữ ký**. Nhờ vậy khi cập nhật bằng `./install.sh`,
-macOS vẫn nhận ra đó là cùng một app và bạn **không phải cấp lại quyền Trợ năng**.
+bạn **không phải cấp lại quyền Trợ năng**. Không có chứng chỉ thì app được ký ad-hoc và mỗi lần cài phải cấp lại quyền.
 
-Nếu không có chứng chỉ, app được ký ad-hoc và mỗi lần cài phải cấp lại quyền.
+Đóng gói bản phát hành (`build/release/SenKey.zip` và `SenKey.dmg`): `./package.sh`.
 
 </details>
 
@@ -117,12 +125,11 @@ flowchart LR
 
 ## 🗑️ Gỡ cài đặt
 
-```bash
-./uninstall.sh
-```
+1. Bấm **Vi/En** trên thanh menu → **Thoát SenKey**.
+2. Mở **Applications**, kéo **SenKey** vào **Thùng rác**.
+3. Vào **Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng**, chọn SenKey rồi bấm dấu **−** để xoá khỏi danh sách.
 
-Script thoát app, xoá `/Applications/SenKey.app`, xoá quyền Trợ năng và cài đặt đã lưu. Thư mục mã nguồn được giữ nguyên.
-Nếu đã bật *Khởi động cùng macOS*, kiểm tra thêm **Cài đặt chung → Mục đăng nhập**.
+Nếu cài từ mã nguồn, chạy `./uninstall.sh`: script làm cả ba bước trên và xoá luôn cài đặt đã lưu.
 
 ## 🏗️ Cấu trúc dự án
 
@@ -134,10 +141,12 @@ SenKey/
 │   │   ├── KeyboardHook.swift              # CGEventTap, gửi Backspace + Unicode, phím tắt
 │   │   ├── Settings.swift                  # cài đặt theo ứng dụng (UserDefaults)
 │   │   ├── AppDelegate.swift               # menu bar
-│   │   └── SettingsView.swift              # cửa sổ cài đặt (SwiftUI)
+│   │   ├── SettingsView.swift              # cửa sổ cài đặt (SwiftUI)
+│   │   └── OnboardingView.swift            # cửa sổ hướng dẫn lần đầu
 │   └── EngineTests/main.swift              # 77 test mô phỏng gõ, chạy tự động khi build
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
 ├── build.sh · install.sh · uninstall.sh · make-cert.sh
+├── get.sh · package.sh                     # cài bằng một lệnh · đóng gói bản phát hành
 ```
 
 Build thủ công: `./build.sh` (dùng `swiftc` trực tiếp, không cần Xcode project hay SwiftPM). Build xong sẽ có file `build/SenKey.app` dạng universal (arm64 + x86_64).
