@@ -74,9 +74,7 @@ final class Settings: ObservableObject {
 
     private init() {
         var s = StoredSettings()
-        // Lần đầu chạy sau khi đổi tên: lấy cài đặt cũ của GoViet (vn.goviet.app).
-        let legacy = UserDefaults(suiteName: "vn.goviet.app")?.data(forKey: "GoViet.settings.v1")
-        if let data = UserDefaults.standard.data(forKey: Self.key) ?? legacy,
+        if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(StoredSettings.self, from: data) {
             s = decoded
         }

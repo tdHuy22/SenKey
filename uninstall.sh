@@ -15,7 +15,6 @@ tccutil reset Accessibility "$BUNDLE_ID" 2>/dev/null || true
 
 echo "▸ Xoá cài đặt đã lưu (kiểu gõ, danh sách ứng dụng)"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
-defaults delete vn.goviet.app 2>/dev/null || true  # tên cũ trước khi đổi thành SenKey
 
 echo "(Chứng chỉ ký SenKey Dev vẫn giữ lại. Xoá nếu không build nữa:"
 echo "   security delete-keychain \"$HOME/Library/Application Support/SenKey/signing/senkey-signing.keychain-db\""

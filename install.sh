@@ -21,16 +21,6 @@ if [[ "$NEW_DR" != *"certificate leaf"* || "$NEW_DR" != "$OLD_DR" ]]; then
   NEED_GRANT=1
 fi
 
-if [[ -d /Applications/GoViet.app ]]; then
-  # Tên cũ trước khi đổi thành SenKey: thoát trước rồi mới xoá quyền để tránh treo.
-  echo "▸ Gỡ bản cũ GoViet.app"
-  pkill -x GoViet 2>/dev/null || true
-  sleep 1
-  tccutil reset Accessibility vn.goviet.app >/dev/null 2>&1 || true
-  rm -rf /Applications/GoViet.app
-  NEED_GRANT=1
-fi
-
 echo "▸ Chép vào /Applications"
 rm -rf /Applications/SenKey.app
 ditto build/SenKey.app /Applications/SenKey.app
