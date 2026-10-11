@@ -41,11 +41,22 @@ PLIST
 # Hardened runtime (--options runtime): chặn nạp thư viện lạ vào tiến trình đang có quyền đọc phím.
 # Ký bằng chứng chỉ "SenKey Dev" (tạo bằng ./make-cert.sh) để giữ quyền Trợ năng qua các lần build.
 # Chưa có chứng chỉ thì ký ad-hoc (mỗi lần build phải cấp lại quyền).
+# Ai có khoá này thì ký được app giả mà macOS coi là SenKey (có luôn quyền đọc phím), nên keychain
+# chỉ mở bằng passphrase gõ tay và được khoá lại ngay sau khi ký.
 SIGN_DIR="$HOME/Library/Application Support/SenKey/signing"
 SIGN_KEYCHAIN="$SIGN_DIR/senkey-signing.keychain-db"
-if [[ -f "$SIGN_KEYCHAIN" && -f "$SIGN_DIR/keychain-password" ]]; then
-  security unlock-keychain -p "$(cat "$SIGN_DIR/keychain-password")" "$SIGN_KEYCHAIN"
+if [[ -f "$SIGN_KEYCHAIN" ]]; then
+  if [[ -e "$SIGN_DIR/keychain-password" ]]; then
+    echo "✗ Còn file mật khẩu keychain dạng chữ thường. Chạy ./make-cert.sh một lần để chuyển sang passphrase." >&2
+    exit 1
+  fi
+  trap 'security lock-keychain "$SIGN_KEYCHAIN" 2>/dev/null || true' EXIT
+  trap 'exit 130' INT TERM HUP   # zsh không chạy trap EXIT khi bị Ctrl-C; đổi thành exit để vẫn khoá keychain
+  echo "▸ Ký bằng chứng chỉ SenKey Dev — nhập passphrase của keychain ký"
+  echo "  (Chuyển SenKey sang En trước khi gõ: lời hỏi trong Terminal không phải ô mật khẩu thật nên SenKey sẽ thêm dấu.)"
+  security unlock-keychain "$SIGN_KEYCHAIN"
   codesign --force --options runtime --keychain "$SIGN_KEYCHAIN" --sign "SenKey Dev" "$APP"
+  security lock-keychain "$SIGN_KEYCHAIN"
   echo "✓ Xong: $APP (ký bằng chứng chỉ SenKey Dev)"
 else
   codesign --force --options runtime --sign - "$APP"

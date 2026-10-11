@@ -63,6 +63,15 @@ Cách này tự tải bản mới nhất, cài vào **Applications** và mở ap
 
 Mở lại cửa sổ này bất cứ lúc nào: bấm **Vi/En** trên thanh menu → **Hướng dẫn cài đặt…**
 
+### 🔏 Kiểm tra bản cài là thật
+
+SenKey đọc được mọi phím bạn gõ, nên chỉ cài bản mang đúng chữ ký của tác giả. Lệnh cài một dòng ở trên tự kiểm việc này
+và từ chối cài nếu chữ ký sai. Nếu cài từ file DMG, mở file DMG rồi kiểm **trước khi kéo vào Applications** (in ra `SenKey thật` là đúng; đã cài rồi thì thay đường dẫn bằng `/Applications/SenKey.app`):
+
+```bash
+codesign --verify --strict --deep -R '=identifier "vn.senkey.app" and certificate leaf = H"e90227565deafdcd07f260406f4934fe32ed72d6"' /Volumes/SenKey/SenKey.app && echo "SenKey thật"
+```
+
 > [!WARNING]
 > **Đừng tắt quyền Trợ năng của SenKey khi app đang chạy.** Trên một số bản macOS, việc này có thể làm treo bàn phím và chuột.
 > Muốn tắt quyền thì bấm **Vi/En → Thoát SenKey** trước.
@@ -77,16 +86,21 @@ Chỉ cần Xcode Command Line Tools (`xcode-select --install`).
 ```bash
 git clone https://github.com/tdHuy22/SenKey.git
 cd SenKey
-./make-cert.sh   # chỉ cần chạy một lần
-./install.sh     # build, chép vào /Applications, mở app
+./make-cert.sh   # chỉ cần chạy một lần: đặt passphrase cho chứng chỉ ký
+./install.sh     # build, ký (hỏi passphrase), chép vào /Applications, mở app
 ```
 
 `make-cert.sh` tạo chứng chỉ tự ký **"SenKey Dev"** trong một keychain riêng tại
-`~/Library/Application Support/SenKey/signing/`. Nó không đụng vào keychain đăng nhập và không hỏi mật khẩu máy.
-`build.sh` tự dùng chứng chỉ này, nên mọi bản build có **cùng chữ ký**. Nhờ vậy khi cập nhật bằng `./install.sh`,
-bạn **không phải cấp lại quyền Trợ năng**. Không có chứng chỉ thì app được ký ad-hoc và mỗi lần cài phải cấp lại quyền.
+`~/Library/Application Support/SenKey/signing/`. Nó không đụng vào keychain đăng nhập. Keychain này khoá bằng
+**passphrase do bạn đặt**, không lưu ra file; cất passphrase vào trình quản lý mật khẩu.
+`build.sh` hỏi passphrase mỗi lần ký và khoá keychain ngay sau đó, nên mọi bản build có **cùng chữ ký**. Nhờ vậy khi cập nhật
+bằng `./install.sh`, bạn **không phải cấp lại quyền Trợ năng**. Không có chứng chỉ thì app được ký ad-hoc và mỗi lần cài phải cấp lại quyền.
 
-Đóng gói bản phát hành (`build/release/SenKey.zip` và `SenKey.dmg`): `./package.sh`.
+Ai có khoá này thì ký được app giả mà macOS coi là SenKey, nên đừng để khoá ở dạng dễ đọc. Máy tạo chứng chỉ bằng bản cũ
+của `make-cert.sh` (còn file `keychain-password`) thì chạy lại `./make-cert.sh` một lần để chuyển sang passphrase.
+
+Đóng gói bản phát hành (`build/release/SenKey.zip` và `SenKey.dmg`): `./package.sh`. Script từ chối đóng gói nếu app không khớp
+chữ ký ghim trong `get.sh`. Repo bật immutable releases, nên đăng bản nháp, kiểm xong rồi mới công bố: đã công bố thì không thay file được nữa.
 
 </details>
 
@@ -122,6 +136,8 @@ flowchart LR
 ## ⚠️ Giới hạn
 
 - Ô mật khẩu và **Secure Keyboard Entry** (Terminal, 1Password…) chặn mọi bộ gõ dạng này, nên gõ ra chữ không dấu.
+- Lời hỏi mật khẩu trong Terminal (`sudo`, `ssh`) không phải ô mật khẩu thật, nên SenKey vẫn thêm dấu (`password` thành `pasword`).
+  Chuyển sang **En** trước khi gõ mật khẩu ở đó, hoặc đặt Terminal ở chế độ tiếng Anh.
 - Sau khi nhấn Space rồi Backspace quay lại từ trước, cần gõ lại cả từ để thêm dấu.
 
 ## 🗑️ Gỡ cài đặt
@@ -147,7 +163,8 @@ SenKey/
 │   └── EngineTests/main.swift              # 77 test mô phỏng gõ, chạy tự động khi build
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
 ├── build.sh · install.sh · uninstall.sh · make-cert.sh
-├── get.sh · package.sh                     # cài bằng một lệnh · đóng gói bản phát hành
+├── get.sh · package.sh                     # cài bằng một lệnh (kiểm chữ ký) · đóng gói bản phát hành
+├── SECURITY.md                             # báo lỗi bảo mật, cách kiểm bản cài
 └── LICENSE                                 # MIT
 ```
 
