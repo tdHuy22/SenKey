@@ -9,7 +9,7 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
 ![Swift 5](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
 ![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-4B8BBE)
-![Tests](https://img.shields.io/badge/tests-77%2F77%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-106%2F106%20passing-2ea44f)
 ![Speed](https://img.shields.io/badge/engine-~1.2%C2%B5s%2Fph%C3%ADm-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -27,7 +27,7 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 | 🎯 **Riêng cho từng app** | VS Code gõ tiếng Anh, Messenger gõ Telex, Excel gõ VNI. SenKey tự nhớ |
 | 🚫 **Không marked text** | Không có chữ gạch chân, không lặp chữ kiểu `viêviệt` |
 | 🌐 **Sửa lỗi ô gợi ý** | Thanh địa chỉ Chrome / Safari / Firefox / Edge / Arc / Cốc Cốc, Spotlight, Raycast, Alfred, Excel |
-| 🔤 **Tự khôi phục tiếng Anh** | `windows`, `google`, `facebook` vẫn là chính nó |
+| 🔤 **Tự khôi phục tiếng Anh** | `windows`, `google`, `facebook` vẫn là chính nó; gõ xong từ mà không ra tiếng Việt (`user`, `data`) cũng được trả lại |
 | ⚡ **Siêu nhẹ** | Engine xử lý mỗi phím trong khoảng 1,2 µs, app nằm gọn trên menu bar |
 | 🛡️ **An toàn** | Tự gỡ bộ bắt phím trong 0,5 giây khi mất quyền Trợ năng, không làm treo máy |
 
@@ -160,7 +160,7 @@ SenKey/
 │   │   ├── AppDelegate.swift               # menu bar
 │   │   ├── SettingsView.swift              # cửa sổ cài đặt (SwiftUI)
 │   │   └── OnboardingView.swift            # cửa sổ hướng dẫn lần đầu
-│   └── EngineTests/main.swift              # 77 test mô phỏng gõ, chạy tự động khi build
+│   └── EngineTests/main.swift              # 106 test mô phỏng gõ, chạy tự động khi build
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
 ├── build.sh · install.sh · uninstall.sh · make-cert.sh
 ├── get.sh · package.sh                     # cài bằng một lệnh (kiểm chữ ký) · đóng gói bản phát hành

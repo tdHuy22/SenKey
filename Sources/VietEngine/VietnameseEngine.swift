@@ -102,6 +102,28 @@ public final class VietnameseEngine {
         return commit()
     }
 
+    /// Người dùng kết thúc từ (Space, dấu câu, Enter…). Lúc đang gõ engine phải cho qua những dạng
+    /// chưa xong như "ue" (sắp thành "uê") hay "tẽt" (sắp đổi sang "tét"); tới đây từ đã xong nên
+    /// kiểm chặt: không phải âm tiết tiếng Việt thì trả lại phím gốc ("user" → "ủe" → "user").
+    /// Trả nil nếu không cần đổi gì. Engine luôn được reset.
+    public func finishWord() -> EditResult? {
+        defer { reset() }
+        guard !locked, !screen.isEmpty else { return nil }
+        // "ươ" không có âm cuối viết là "uơ": thuowr → thuở (gõ tiếp "ng" thì vẫn là "thương")
+        let p = split()
+        if p.final.isEmpty, p.nucleus.count == 2,
+           chars[p.nucleus.lowerBound].base == "u", chars[p.nucleus.lowerBound].mark == .horn,
+           chars[p.nucleus.lowerBound + 1].base == "o", chars[p.nucleus.lowerBound + 1].mark == .horn {
+            chars[p.nucleus.lowerBound].mark = .none
+        }
+        if autoRestoreEnglish && render() != raw && !isCompleteSyllable() {
+            chars = raw.map { VChar(base: Character($0.lowercased()), upper: $0.isUppercase) }
+            tone = .none
+        }
+        let result = commit()
+        return result.backspaces == 0 && result.text.isEmpty ? nil : result
+    }
+
     /// Người dùng nhấn Backspace. Trả về false nếu engine không có gì để xoá.
     /// Phím Backspace thật vẫn được gửi đi; engine chỉ đồng bộ trạng thái.
     @discardableResult
@@ -320,6 +342,42 @@ public final class VietnameseEngine {
         if p.final.isEmpty { return true }
         let fin = String(chars[p.final].map { $0.base })
         return Self.finals.contains(fin) && Self.nucleiWithFinal.contains(nuc)
+    }
+
+    /// Vần đã có mũ/móc, dùng khi từ đã gõ xong. "ue", "uo" không mũ không còn hợp lệ ở đây
+    /// ("que" đã tách "qu" làm phụ âm đầu).
+    private static let openRimes: Set<String> = [
+        "a", "e", "ê", "i", "o", "ô", "ơ", "u", "ư", "y",
+        "ai", "ao", "au", "âu", "ay", "ây", "eo", "êu", "ia", "iu", "oa", "oe", "oi", "ôi", "ơi",
+        "ua", "uê", "ui", "ưa", "ưi", "ưu", "uy", "uơ",
+        "iêu", "yêu", "oai", "oao", "oay", "oeo", "uây", "uôi", "ươi", "ươu", "uya", "uyu",
+    ]
+    private static let closedRimes: Set<String> = [
+        "a", "ă", "â", "e", "ê", "i", "o", "ô", "ơ", "u", "ư",
+        "oa", "oă", "oe", "uâ", "uê", "uy", "iê", "yê", "uô", "ươ", "oo", "uyê",
+    ]
+    /// "ch", "nh" chỉ đứng sau những vần này (ách, ếch, ích, oách, uếch, uých).
+    private static let palatalRimes: Set<String> = ["a", "ê", "i", "oa", "uê", "uy"]
+
+    private static func markedVowel(_ c: VChar) -> Character {
+        vowelVariant(c).map { vowelRows[$0][0][0] } ?? c.base
+    }
+
+    /// Kiểm chặt khi từ đã gõ xong: vần phải có thật (tính cả mũ/móc), và vần kết thúc bằng
+    /// c, ch, p, t chỉ mang dấu sắc hoặc nặng.
+    private func isCompleteSyllable() -> Bool {
+        guard isValidSyllable() else { return false }
+        let p = split()
+        if p.nucleus.isEmpty { return true }  // chỉ có phụ âm, vd "đ"
+        var rime = String(chars[p.nucleus].map { Self.markedVowel($0) })
+        // "qu" đã lấy mất "u" của vần "uy": quýt, quỳnh, quých
+        if p.onset.count == 2 && chars[0].base == "q" && rime.first == "y" { rime = "u" + rime }
+        if p.final.isEmpty { return Self.openRimes.contains(rime) }
+        guard Self.closedRimes.contains(rime) else { return false }
+        let fin = String(chars[p.final].map { $0.base })
+        if (fin == "ch" || fin == "nh") && !Self.palatalRimes.contains(rime) { return false }
+        if ["c", "ch", "p", "t"].contains(fin) { return tone == .sac || tone == .nang }
+        return true
     }
 
     private func tonePosition() -> Int? {

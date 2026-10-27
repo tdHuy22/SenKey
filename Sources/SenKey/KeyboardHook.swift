@@ -243,14 +243,23 @@ final class KeyboardHook {
         engine.modernToneStyle = config.modernToneStyle
         engine.autoRestoreEnglish = config.autoRestoreEnglish
 
+        let fix = contextID.map { config.fixAutocompleteApps.contains($0) } ?? false
         guard let result = engine.process(ch) else {
+            // Space, dấu câu, Enter, Tab kết thúc từ: có thể phải sửa từ vừa gõ ("ủe" → "user").
+            // Phím gốc được gửi lại sau phần sửa để chắc chắn đi sau nó. Esc… thì chỉ bỏ từ.
+            let endsWord = unit >= 0x20 || unit == 0x0D || unit == 0x09 || unit == 0x03
+            if endsWord, let finish = engine.finishWord(), let copy = event.copy() {
+                send(finish, fixAutocomplete: fix, proxy: proxy)
+                copy.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
+                copy.tapPostEvent(proxy)
+                return nil
+            }
             engine.reset()
             return pass
         }
         if result.backspaces == 0 && result.text.utf8.count == 1 && result.text.utf8.first == UInt8(unit) {
             return pass  // không đổi gì — để phím gốc đi qua, ổn định nhất
         }
-        let fix = contextID.map { config.fixAutocompleteApps.contains($0) } ?? false
         send(result, fixAutocomplete: fix, proxy: proxy)
         return nil
     }

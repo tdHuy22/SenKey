@@ -2,8 +2,8 @@ import Foundation
 
 
 /// Mô phỏng màn hình: áp từng EditResult giống như app thật gửi phím.
-func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = true) -> String {
-    let engine = VietnameseEngine(method: method, modernToneStyle: modern)
+func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = true, restore: Bool = true) -> String {
+    let engine = VietnameseEngine(method: method, modernToneStyle: modern, autoRestoreEnglish: restore)
     var screen: [Character] = []
     for ch in input {
         if ch == "<" { // Backspace
@@ -15,7 +15,11 @@ func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = tru
             screen.removeLast(r.backspaces)
             screen.append(contentsOf: r.text)
         } else {
-            engine.reset()
+            // Giống KeyboardHook: phím ngoài từ (Space, dấu câu…) kết thúc từ trước khi đi qua
+            if let r = engine.finishWord() {
+                screen.removeLast(r.backspaces)
+                screen.append(contentsOf: r.text)
+            }
             screen.append(ch)
         }
     }
@@ -24,9 +28,9 @@ func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = tru
 
 var failures = 0
 var total = 0
-func check(_ input: String, _ expected: String, _ method: InputMethod = .telex, modern: Bool = true) {
+func check(_ input: String, _ expected: String, _ method: InputMethod = .telex, modern: Bool = true, restore: Bool = true) {
     total += 1
-    let got = typeWords(input, method: method, modern: modern)
+    let got = typeWords(input, method: method, modern: modern, restore: restore)
     if got != expected {
         failures += 1
         print("FAIL [\(method.displayName)] \"\(input)\" → \"\(got)\" (mong đợi \"\(expected)\")")
@@ -95,6 +99,36 @@ check("quown", "quơn")
 check("quys", "quý")
 check("quaanf", "quần")
 check("qw", "qw")
+// Kết thúc từ: không phải âm tiết tiếng Việt thì trả lại phím gốc
+check("user ", "user ")
+check("sure.", "sure.")
+check("text ", "text ")
+check("data,", "data,")
+check("vieetj nam ", "việt nam ")
+check("nguowif ", "người ")
+check("quoocs ", "quốc ")
+check("khuya ", "khuya ")
+check("giuwax ", "giữa ")
+check("ruouwj ", "rượu ")
+check("xooong ", "xoong ")
+check("khuyru ", "khuỷu ")
+check("nguyeenx ", "nguyễn ")
+check("hoachj ", "hoạch ")
+check("thuowr ", "thuở ")
+check("huow ", "huơ ")
+check("thuowng ", "thương ")
+check("thuowr ", "thuở ", restore: false)
+check("tieengs ", "tiếng ")
+check("dd ", "đ ")
+check("hoaf ", "hoà ")
+check("tex ", "tẽ ")
+check("tets ", "tét ")
+check("dda ", "đa ")
+check("quynhf ", "quỳnh ")
+check("quyts ", "quýt ")
+check("quyeets ", "quyết ")
+check("quyx ", "quỹ ")
+check("user ", "ủe ", restore: false)
 // Backspace
 check("vieetj<t", "việt")
 check("vieetj<<", "vi")
