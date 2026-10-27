@@ -82,6 +82,8 @@ public final class VietnameseEngine {
 
     public var isEmpty: Bool { screen.isEmpty }
     public var currentWord: String { String(screen) }
+    /// Các phím đã gõ cho từ hiện tại ("ddc" khi màn hình là "ddc", "vieetj" khi màn hình là "việt").
+    public var typedKeys: String { String(raw) }
 
     public func reset() {
         chars = []

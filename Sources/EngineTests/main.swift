@@ -232,6 +232,52 @@ check("viet⎋ ", "viet ")
 check("⌥mix tieengs", "mix tiếng")
 check("vieetj⌥ ", "vieetj ")
 
+// Gõ tắt
+func expect(_ got: String?, _ want: String?, _ label: String) {
+    total += 1
+    if got != want { failures += 1; print("FAIL [\(label)] → \(got ?? "nil") (mong đợi \(want ?? "nil"))") }
+}
+let macros = MacroExpander.table([
+    Macro(abbreviation: "ko", text: "không"), Macro(abbreviation: "Btw", text: "by the way"),
+    Macro(abbreviation: "ngay", text: "hôm nay {date}"), Macro(abbreviation: "", text: "x"),
+    Macro(abbreviation: "a b", text: "x"),
+])
+let noon = Date(timeIntervalSince1970: 1_699_963_200)  // 12:00 UTC 14/11/2023: vẫn ngày 14 ở mọi múi giờ VN, Mỹ, châu Âu
+expect(MacroExpander.expand("ko", table: macros), "không", "ko")
+expect(MacroExpander.expand("Ko", table: macros), "Không", "Ko")
+expect(MacroExpander.expand("KO", table: macros), "KHÔNG", "KO")
+expect(MacroExpander.expand("btw", table: macros), "by the way", "btw")
+expect(MacroExpander.expand("BTW", table: macros), "BY THE WAY", "BTW")
+expect(MacroExpander.expand("kho", table: macros), nil, "kho")
+expect(MacroExpander.expand("", table: macros), nil, "rỗng")
+expect(String(MacroExpander.expand("ngay", table: macros, now: noon)!.prefix(10)), "hôm nay 14", "{date}")
+expect(macros.count == 3 ? "3" : "\(macros.count)", "3", "bỏ mục rỗng, có khoảng trắng")
+// Viết hoa đầu câu
+func caps(_ s: String) -> String {
+    var c = SentenceCapitalizer()
+    return String(s.map { ch -> Character in
+        if ch.isLetter { return c.takeLetter() ? Character(ch.uppercased()) : ch }
+        c.didType(ch); return ch
+    })
+}
+expect(caps("chào. bạn khoẻ? tôi khoẻ! ok"), "chào. Bạn khoẻ? Tôi khoẻ! Ok", "câu")
+expect(caps("3.5 triệu. vâng\rdạ"), "3.5 triệu. Vâng\rDạ", "số, Enter")
+expect(caps("a.b"), "a.b", "không có Space")
+// Phím tắt, phiên bản
+let ctrlShift = HotkeySpec(keyCode: nil, modifiers: HotkeySpec.control | HotkeySpec.shift)
+expect(ctrlShift.displayName, "⌃⇧", "⌃⇧")
+expect(ctrlShift.isValid ? "ok" : "sai", "ok", "⌃⇧ hợp lệ")
+expect(HotkeySpec(keyCode: nil, modifiers: HotkeySpec.option).isValid ? "ok" : "sai", "sai", "⌥ đơn lẻ")
+let optZ = HotkeySpec(keyCode: 6, modifiers: HotkeySpec.option, keyLabel: "Z")
+expect(optZ.displayName, "⌥Z", "⌥Z")
+expect(optZ.matches(keyCode: 6, modifiers: HotkeySpec.option | 0x100) ? "ok" : "sai", "ok", "⌥Z khớp")
+expect(optZ.matches(keyCode: 6, modifiers: HotkeySpec.option | HotkeySpec.shift) ? "ok" : "sai", "sai", "⌥⇧Z")
+expect(AppVersion.isNewer("v1.2.0", than: "1.1.1") ? "ok" : "sai", "ok", "1.2.0 > 1.1.1")
+expect(AppVersion.isNewer("v1.1.1", than: "1.1.1") ? "ok" : "sai", "sai", "bằng nhau")
+expect(AppVersion.isNewer("1.10", than: "1.9.9") ? "ok" : "sai", "ok", "1.10 > 1.9.9")
+expect(typeWordsKeys("vieetj"), "vieetj", "typedKeys")
+func typeWordsKeys(_ s: String) -> String { let e = VietnameseEngine(); for ch in s { _ = e.process(ch) }; return e.typedKeys }
+
 print("\(total - failures)/\(total) test đạt")
 if failures > 0 { exit(1) }
 
