@@ -119,7 +119,6 @@ check("qw", "qw")
 check("user ", "user ")
 check("sure.", "sure.")
 check("text ", "text ")
-check("data,", "dât,")         // thiếu dấu thì để nguyên
 check("dduowc ", "đươc ")
 check("vieet ", "viêt ")
 check("vieetj nam ", "việt nam ")
@@ -139,7 +138,19 @@ check("thuowr ", "thuở ", restore: false)
 check("tieengs ", "tiếng ")
 check("dd ", "đ ")
 check("hoaf ", "hoà ")
-check("tex ", "tẽ ")
+check("tex ", "tex ")         // từ điển tiếng Anh
+// Từ điển tiếng Anh: chỉ khôi phục khi kết quả không phải từ Việt có thật
+check("different ", "different ")
+check("possible.", "possible.")
+check("Message ", "Message ")
+check("more ", "more ")
+check("data ", "data ")
+check("there ", "thể ")       // "thể" có thật: tiếng Việt thắng
+check("this ", "thí ")
+check("has ", "há ")
+check("has⎋ ", "has ")        // muốn tiếng Anh thì Esc
+check("more ", "moẻ ", restore: false)
+check("different ", "different ", .vni)  // VNI dùng số làm dấu nên không nuốt chữ
 check("tets ", "tét ")
 check("dda ", "đa ")
 check("quynhf ", "quỳnh ")

@@ -138,7 +138,14 @@ public final class VietnameseEngine {
     /// Trả nil nếu không cần đổi gì. Engine luôn được reset.
     public func finishWord() -> EditResult? {
         defer { reset() }
-        guard !locked, !screen.isEmpty else { return nil }
+        guard !screen.isEmpty else { return nil }
+        // Từ tiếng Anh mà Telex gõ hỏng: "different" → "diferent", "more" → "moẻ" (xem EnglishWords.swift)
+        if autoRestoreEnglish && method.isTelex && screen != raw && EnglishWords.contains(String(raw).lowercased()) {
+            chars = raw.map { VChar(base: Character($0.lowercased()), upper: $0.isUppercase) }
+            tone = .none
+            return commit()
+        }
+        guard !locked else { return nil }
         // "ươ" không có âm cuối viết là "uơ": thuowr → thuở (gõ tiếp "ng" thì vẫn là "thương")
         let p = split()
         if p.final.isEmpty, p.nucleus.count == 2,
