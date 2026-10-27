@@ -24,6 +24,14 @@ jobs:
           swiftc --version
           sw_vers
 
+      - name: Chữ ký ghim trong app khớp get.sh
+        run: |
+          # Bộ tự cập nhật trong app và get.sh phải kiểm cùng một yêu cầu chữ ký
+          want=$(sed -n "s/^REQUIREMENT='\(.*\)'$/\1/p" get.sh)
+          have=$(sed -n 's/.*static let requirement = #"\(.*\)"#$/\1/p' Sources/SenKey/Updater.swift)
+          echo "get.sh:  $want"; echo "Updater: $have"
+          [[ -n "$want" && "$want" == "$have" ]]
+
       - name: Test engine, biên dịch app universal
         run: ./build.sh
 

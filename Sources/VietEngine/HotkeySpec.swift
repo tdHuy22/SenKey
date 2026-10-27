@@ -20,11 +20,11 @@ public struct HotkeySpec: Codable, Equatable {
         self.keyLabel = keyLabel
     }
 
-    /// Hợp lệ khi có ít nhất một phím bổ trợ; loại chỉ-bổ-trợ cần ít nhất hai (một phím đơn lẻ như ⇧
-    /// được nhấn suốt khi gõ, không dùng làm phím tắt được).
+    /// Loại chỉ-bổ-trợ cần ít nhất hai phím (một phím đơn lẻ như ⇧ được nhấn suốt khi gõ).
+    /// Loại có phím thường cần ⌃, ⌥ hoặc ⌘ (⇧ + chữ là gõ chữ hoa, không thể làm phím tắt).
     public var isValid: Bool {
-        let count = [Self.shift, Self.control, Self.option, Self.command].filter { modifiers & $0 != 0 }.count
-        return keyCode == nil ? count >= 2 : count >= 1
+        if keyCode != nil { return modifiers & (Self.control | Self.option | Self.command) != 0 }
+        return [Self.shift, Self.control, Self.option, Self.command].filter { modifiers & $0 != 0 }.count >= 2
     }
 
     public var displayName: String {

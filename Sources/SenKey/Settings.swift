@@ -2,14 +2,16 @@ import AppKit
 import Combine
 
 enum AppMode: String, Codable, CaseIterable, Identifiable {
-    case followDefault, telex, vni, english
+    case followDefault, telex, simpleTelex, vni, viqr, english
 
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .followDefault: return "Theo mặc định"
         case .telex: return "Telex"
+        case .simpleTelex: return "Simple Telex"
         case .vni: return "VNI"
+        case .viqr: return "VIQR"
         case .english: return "Tiếng Anh (tắt)"
         }
     }
@@ -20,10 +22,12 @@ struct AppRule: Codable, Equatable {
     var mode: AppMode = .followDefault
     /// nil = theo danh sách mặc định (trình duyệt, Spotlight…)
     var fixAutocomplete: Bool?
+    /// Gửi chữ từng ký tự một, cho ứng dụng nhận sai khi gửi cả cụm. nil = tắt.
+    var sendStepByStep: Bool?
 }
 
 enum Hotkey: String, Codable, CaseIterable, Identifiable {
-    case ctrlShift, optionZ, ctrlSpace, cmdShiftSpace
+    case ctrlShift, optionZ, ctrlSpace, cmdShiftSpace, custom
 
     var id: String { rawValue }
     var displayName: String {
@@ -32,22 +36,103 @@ enum Hotkey: String, Codable, CaseIterable, Identifiable {
         case .optionZ: return "⌥Z"
         case .ctrlSpace: return "⌃Space"
         case .cmdShiftSpace: return "⌘⇧Space"
+        case .custom: return "Tuỳ chỉnh"
+        }
+    }
+
+    /// nil với .custom (dùng phím người dùng đã ghi).
+    var preset: HotkeySpec? {
+        switch self {
+        case .ctrlShift: return HotkeySpec(keyCode: nil, modifiers: HotkeySpec.control | HotkeySpec.shift)
+        case .optionZ: return HotkeySpec(keyCode: 6, modifiers: HotkeySpec.option, keyLabel: "Z")
+        case .ctrlSpace: return HotkeySpec(keyCode: 49, modifiers: HotkeySpec.control, keyLabel: "Space")
+        case .cmdShiftSpace: return HotkeySpec(keyCode: 49, modifiers: HotkeySpec.command | HotkeySpec.shift, keyLabel: "Space")
+        case .custom: return nil
         }
     }
 }
 
-private struct StoredSettings: Codable {
+/// Nhấn rồi thả riêng phím này: từ đang gõ trả về phím gốc, hoặc từ kế tiếp gõ nguyên phím.
+enum TempEnglishKey: String, Codable, CaseIterable, Identifiable {
+    case off, option, control
+
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .off: return "Tắt"
+        case .option: return "⌥ Option"
+        case .control: return "⌃ Control"
+        }
+    }
+    var modifiers: UInt64? {
+        switch self {
+        case .off: return nil
+        case .option: return HotkeySpec.option
+        case .control: return HotkeySpec.control
+        }
+    }
+}
+
+enum InputMethodChoice: String, Codable, CaseIterable, Identifiable {
+    case telex, simpleTelex, vni, viqr
+    var id: String { rawValue }
+    var method: InputMethod { InputMethod(rawValue: rawValue) ?? .telex }
+    var displayName: String { method.displayName }
+}
+
+/// Mọi cài đặt, đúng dạng lưu trong UserDefaults và trong file xuất/nhập.
+/// Trường nào thiếu (dữ liệu từ bản cũ) thì lấy giá trị mặc định, không làm hỏng cả bộ cài đặt.
+struct StoredSettings: Codable, Equatable {
     var defaultMethod: InputMethodChoice = .telex
     var vietnameseByDefault = true
     var modernToneStyle = true
     var autoRestoreEnglish = true
     var hotkey: Hotkey = .ctrlShift
+    var customHotkey = HotkeySpec(keyCode: nil, modifiers: HotkeySpec.option | HotkeySpec.shift)
     var rules: [String: AppRule] = [:]
-}
+    var quickTelex = false
+    var quickStartConsonant = false
+    var quickEndConsonant = false
+    var escRestore = true
+    var tempEnglishKey: TempEnglishKey = .option
+    var autoCapitalize = false
+    var macrosEnabled = true
+    var macrosInEnglish = true
+    var macros: [Macro] = []
+    var autoCheckUpdates = true
 
-enum InputMethodChoice: String, Codable, CaseIterable, Identifiable {
-    case telex, vni
-    var id: String { rawValue }
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultMethod, vietnameseByDefault, modernToneStyle, autoRestoreEnglish, hotkey, customHotkey, rules
+        case quickTelex, quickStartConsonant, quickEndConsonant, escRestore, tempEnglishKey, autoCapitalize
+        case macrosEnabled, macrosInEnglish, macros, autoCheckUpdates
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = StoredSettings()
+        func get<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback
+        }
+        defaultMethod = get(.defaultMethod, d.defaultMethod)
+        vietnameseByDefault = get(.vietnameseByDefault, d.vietnameseByDefault)
+        modernToneStyle = get(.modernToneStyle, d.modernToneStyle)
+        autoRestoreEnglish = get(.autoRestoreEnglish, d.autoRestoreEnglish)
+        hotkey = get(.hotkey, d.hotkey)
+        customHotkey = get(.customHotkey, d.customHotkey)
+        rules = get(.rules, d.rules)
+        quickTelex = get(.quickTelex, d.quickTelex)
+        quickStartConsonant = get(.quickStartConsonant, d.quickStartConsonant)
+        quickEndConsonant = get(.quickEndConsonant, d.quickEndConsonant)
+        escRestore = get(.escRestore, d.escRestore)
+        tempEnglishKey = get(.tempEnglishKey, d.tempEnglishKey)
+        autoCapitalize = get(.autoCapitalize, d.autoCapitalize)
+        macrosEnabled = get(.macrosEnabled, d.macrosEnabled)
+        macrosInEnglish = get(.macrosInEnglish, d.macrosInEnglish)
+        macros = get(.macros, d.macros)
+        autoCheckUpdates = get(.autoCheckUpdates, d.autoCheckUpdates)
+    }
 }
 
 final class Settings: ObservableObject {
@@ -70,7 +155,20 @@ final class Settings: ObservableObject {
     @Published var modernToneStyle: Bool { didSet { save() } }
     @Published var autoRestoreEnglish: Bool { didSet { save() } }
     @Published var hotkey: Hotkey { didSet { save() } }
+    @Published var customHotkey: HotkeySpec { didSet { save() } }
     @Published var rules: [String: AppRule] { didSet { save() } }
+    @Published var quickTelex: Bool { didSet { save() } }
+    @Published var quickStartConsonant: Bool { didSet { save() } }
+    @Published var quickEndConsonant: Bool { didSet { save() } }
+    @Published var escRestore: Bool { didSet { save() } }
+    @Published var tempEnglishKey: TempEnglishKey { didSet { save() } }
+    @Published var autoCapitalize: Bool { didSet { save() } }
+    @Published var macrosEnabled: Bool { didSet { save() } }
+    @Published var macrosInEnglish: Bool { didSet { save() } }
+    @Published var macros: [Macro] { didSet { save() } }
+    @Published var autoCheckUpdates: Bool { didSet { save() } }
+
+    private var loading = false
 
     private init() {
         var s = StoredSettings()
@@ -83,19 +181,96 @@ final class Settings: ObservableObject {
         modernToneStyle = s.modernToneStyle
         autoRestoreEnglish = s.autoRestoreEnglish
         hotkey = s.hotkey
+        customHotkey = s.customHotkey
         rules = s.rules
+        quickTelex = s.quickTelex
+        quickStartConsonant = s.quickStartConsonant
+        quickEndConsonant = s.quickEndConsonant
+        escRestore = s.escRestore
+        tempEnglishKey = s.tempEnglishKey
+        autoCapitalize = s.autoCapitalize
+        macrosEnabled = s.macrosEnabled
+        macrosInEnglish = s.macrosInEnglish
+        macros = s.macros
+        autoCheckUpdates = s.autoCheckUpdates
+    }
+
+    var stored: StoredSettings {
+        var s = StoredSettings()
+        s.defaultMethod = defaultMethod
+        s.vietnameseByDefault = vietnameseByDefault
+        s.modernToneStyle = modernToneStyle
+        s.autoRestoreEnglish = autoRestoreEnglish
+        s.hotkey = hotkey
+        s.customHotkey = customHotkey
+        s.rules = rules
+        s.quickTelex = quickTelex
+        s.quickStartConsonant = quickStartConsonant
+        s.quickEndConsonant = quickEndConsonant
+        s.escRestore = escRestore
+        s.tempEnglishKey = tempEnglishKey
+        s.autoCapitalize = autoCapitalize
+        s.macrosEnabled = macrosEnabled
+        s.macrosInEnglish = macrosInEnglish
+        s.macros = macros
+        s.autoCheckUpdates = autoCheckUpdates
+        return s
+    }
+
+    /// Thay toàn bộ cài đặt (nhập từ file). Chỉ lưu một lần ở cuối.
+    func apply(_ s: StoredSettings) {
+        loading = true
+        defaultMethod = s.defaultMethod
+        vietnameseByDefault = s.vietnameseByDefault
+        modernToneStyle = s.modernToneStyle
+        autoRestoreEnglish = s.autoRestoreEnglish
+        hotkey = s.hotkey
+        customHotkey = s.customHotkey
+        rules = s.rules
+        quickTelex = s.quickTelex
+        quickStartConsonant = s.quickStartConsonant
+        quickEndConsonant = s.quickEndConsonant
+        escRestore = s.escRestore
+        tempEnglishKey = s.tempEnglishKey
+        autoCapitalize = s.autoCapitalize
+        macrosEnabled = s.macrosEnabled
+        macrosInEnglish = s.macrosInEnglish
+        macros = s.macros
+        autoCheckUpdates = s.autoCheckUpdates
+        loading = false
+        save()
     }
 
     private func save() {
-        let s = StoredSettings(defaultMethod: defaultMethod, vietnameseByDefault: vietnameseByDefault,
-                               modernToneStyle: modernToneStyle, autoRestoreEnglish: autoRestoreEnglish,
-                               hotkey: hotkey, rules: rules)
-        if let data = try? JSONEncoder().encode(s) {
+        guard !loading else { return }
+        if let data = try? JSONEncoder().encode(stored) {
             UserDefaults.standard.set(data, forKey: Self.key)
         }
     }
 
-    var defaultInputMethod: InputMethod { defaultMethod == .telex ? .telex : .vni }
+    // MARK: - Xuất / nhập
+
+    func exportData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(stored)
+    }
+
+    /// File phải là JSON cài đặt SenKey; file hỏng thì báo lỗi và cài đặt hiện tại giữ nguyên.
+    func importData(_ data: Data) throws {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["defaultMethod"] != nil || object["rules"] != nil || object["macros"] != nil else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        apply(try JSONDecoder().decode(StoredSettings.self, from: data))
+    }
+
+    // MARK: - Tra cứu
+
+    var defaultInputMethod: InputMethod { defaultMethod.method }
+
+    var hotkeySpec: HotkeySpec { hotkey.preset ?? customHotkey }
+    var hotkeyDisplayName: String { hotkeySpec.displayName }
 
     /// nil = gõ tiếng Anh (không xử lý).
     func method(for bundleID: String?) -> InputMethod? {
@@ -103,7 +278,9 @@ final class Settings: ObservableObject {
         switch mode {
         case .followDefault: return vietnameseByDefault ? defaultInputMethod : nil
         case .telex: return .telex
+        case .simpleTelex: return .simpleTelex
         case .vni: return .vni
+        case .viqr: return .viqr
         case .english: return nil
         }
     }
@@ -111,6 +288,11 @@ final class Settings: ObservableObject {
     func fixAutocomplete(for bundleID: String?) -> Bool {
         guard let id = bundleID else { return false }
         return rules[id]?.fixAutocomplete ?? Self.autocompleteApps.contains(id)
+    }
+
+    func sendStepByStep(for bundleID: String?) -> Bool {
+        guard let id = bundleID else { return false }
+        return rules[id]?.sendStepByStep ?? false
     }
 
     /// Ảnh chụp cài đặt cho luồng bắt phím.
@@ -123,10 +305,19 @@ final class Settings: ObservableObject {
             if let fix = rule.fixAutocomplete {
                 if fix { c.fixAutocompleteApps.insert(id) } else { c.fixAutocompleteApps.remove(id) }
             }
+            if rule.sendStepByStep == true { c.stepByStepApps.insert(id) }
         }
         c.modernToneStyle = modernToneStyle
         c.autoRestoreEnglish = autoRestoreEnglish
-        c.hotkey = hotkey
+        c.hotkey = hotkeySpec
+        c.quickTelex = quickTelex
+        c.quickStartConsonant = quickStartConsonant
+        c.quickEndConsonant = quickEndConsonant
+        c.escRestore = escRestore
+        c.tempEnglishModifiers = tempEnglishKey.modifiers
+        c.autoCapitalize = autoCapitalize
+        c.macros = macrosEnabled ? MacroExpander.table(macros) : [:]
+        c.macrosInEnglish = macrosInEnglish
         return c
     }
 
@@ -146,15 +337,22 @@ final class Settings: ObservableObject {
         store(rule, for: bundleID)
     }
 
+    func setSendStepByStep(_ value: Bool, for bundleID: String, name: String) {
+        var rule = rules[bundleID] ?? AppRule(name: name)
+        rule.name = name
+        rule.sendStepByStep = value ? true : nil
+        store(rule, for: bundleID)
+    }
+
     /// Phím tắt: đảo Việt/Anh cho riêng ứng dụng hiện tại và ghi nhớ.
     func toggle(for bundleID: String, name: String) {
-        let defaultMode: AppMode = vietnameseByDefault ? .followDefault : (defaultMethod == .telex ? .telex : .vni)
+        let defaultMode: AppMode = vietnameseByDefault ? .followDefault : AppMode(rawValue: defaultMethod.rawValue) ?? .telex
         let englishMode: AppMode = vietnameseByDefault ? .english : .followDefault
         setMode(method(for: bundleID) == nil ? defaultMode : englishMode, for: bundleID, name: name)
     }
 
     private func store(_ rule: AppRule, for bundleID: String) {
-        if rule.mode == .followDefault && rule.fixAutocomplete == nil {
+        if rule.mode == .followDefault && rule.fixAutocomplete == nil && rule.sendStepByStep == nil {
             rules.removeValue(forKey: bundleID)
         } else {
             rules[bundleID] = rule

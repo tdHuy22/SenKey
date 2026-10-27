@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var cancellables = Set<AnyCancellable>()
     private var permissionTimer: Timer?
+    private var updateTimer: Timer?
     private var accessibilityObserver: NSObjectProtocol?
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
@@ -51,11 +52,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSSound(named: "Tink")?.play()
         }
 
+        Log.add("Mở SenKey \(Updater.shared.currentVersion)")
         startHookOrWaitForPermission()
         updateStatusIcon()
         if !AXIsProcessTrusted() || !UserDefaults.standard.bool(forKey: Self.onboardedKey) {
             showOnboarding()
         }
+        scheduleUpdateChecks()
+    }
+
+    /// Kiểm tra bản mới tối đa một lần mỗi ngày: lúc mở app (trễ một chút) và mỗi 6 giờ hỏi lại xem đã tới hạn chưa.
+    private func scheduleUpdateChecks() {
+        let check = { [weak self] in
+            guard let self, self.settings.autoCheckUpdates else { return }
+            Updater.shared.checkIfDue()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: check)
+        let timer = Timer(timeInterval: 6 * 3600, repeats: true) { _ in check() }
+        timer.tolerance = 600
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
     }
 
     // MARK: - Quyền Trợ năng
@@ -94,13 +110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if AXIsProcessTrusted() {
             if trustedSince == nil { trustedSince = Date() }
             if !hook.isInstalled, Date().timeIntervalSince(trustedSince!) >= 1.5 {
-                _ = hook.start()
+                let started = hook.start()
+                Log.add(started ? "Có quyền Trợ năng, bật bộ bắt phím" : "Có quyền Trợ năng nhưng không tạo được bộ bắt phím")
                 updateStatusIcon()
             }
         } else {
             trustedSince = nil
             if hook.isInstalled {
                 hook.stop()
+                Log.add("Mất quyền Trợ năng, gỡ bộ bắt phím")
                 updateStatusIcon()
             }
         }
@@ -140,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             let toggle = item(method == nil ? "Bật tiếng Việt cho \(name)" : "Tắt tiếng Việt cho \(name)",
                               #selector(toggleCurrentApp))
-            toggle.toolTip = "Phím tắt: \(settings.hotkey.displayName)"
+            toggle.toolTip = "Phím tắt: \(settings.hotkeyDisplayName)"
             menu.addItem(toggle)
 
             let modeMenu = NSMenu()
@@ -163,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let defaultMenu = NSMenu()
         for choice in InputMethodChoice.allCases {
-            let m = item(choice == .telex ? "Telex" : "VNI", #selector(setDefaultMethod(_:)))
+            let m = item(choice.displayName, #selector(setDefaultMethod(_:)))
             m.representedObject = choice.rawValue
             m.state = settings.defaultMethod == choice ? .on : .off
             defaultMenu.addItem(m)
@@ -179,6 +197,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item("Cài đặt & danh sách ứng dụng…", #selector(openSettings), key: ","))
         menu.addItem(item("Hướng dẫn cài đặt…", #selector(showOnboarding)))
+        menu.addItem(item("Kiểm tra bản mới…", #selector(checkForUpdates)))
+        menu.addItem(item("Báo lỗi…", #selector(reportBug)))
         menu.addItem(item("Thoát SenKey", #selector(quit), key: "q"))
     }
 
@@ -229,6 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleVietnameseByDefault() { settings.vietnameseByDefault.toggle() }
     @objc private func toggleToneStyle() { settings.modernToneStyle.toggle() }
     @objc private func toggleAutoRestore() { settings.autoRestoreEnglish.toggle() }
+    @objc private func checkForUpdates() { Updater.shared.check(userInitiated: true) }
+    @objc private func reportBug() { BugReport.open(settings: settings, hookInstalled: hook.isInstalled) }
 
     @objc private func openAccessibilitySettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
@@ -268,10 +290,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 560),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 620),
                                   styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.title = "SenKey – Cài đặt"
-            window.contentViewController = NSHostingController(rootView: SettingsView(settings: settings, loginItem: LoginItemModel()))
+            let actions = SettingsActions(checkForUpdates: { [weak self] in self?.checkForUpdates() },
+                                          reportBug: { [weak self] in self?.reportBug() })
+            window.contentViewController = NSHostingController(
+                rootView: SettingsView(settings: settings, loginItem: LoginItemModel(), actions: actions))
             window.isReleasedWhenClosed = false
             window.center()
             settingsWindow = window

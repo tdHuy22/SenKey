@@ -9,7 +9,18 @@ struct HookConfig {
     var fixAutocompleteApps: Set<String> = []
     var modernToneStyle = true
     var autoRestoreEnglish = true
-    var hotkey: Hotkey = .ctrlShift
+    var hotkey = HotkeySpec(keyCode: nil, modifiers: HotkeySpec.control | HotkeySpec.shift)
+    var stepByStepApps: Set<String> = []
+    var quickTelex = false
+    var quickStartConsonant = false
+    var quickEndConsonant = false
+    var escRestore = true
+    /// Nhấn-thả riêng phím bổ trợ này để gõ nguyên phím. nil = tắt.
+    var tempEnglishModifiers: UInt64?
+    var autoCapitalize = false
+    /// Gõ tắt: chữ viết tắt (chữ thường) → chữ thay thế. Rỗng = tắt.
+    var macros: [String: String] = [:]
+    var macrosInEnglish = true
 
     func method(for bundleID: String?) -> InputMethod? {
         if let id = bundleID, let m = appMethods[id] { return m }
@@ -33,8 +44,7 @@ struct HookConfig {
 final class KeyboardHook {
     private static let syntheticMarker: Int64 = 0x564E_4B45_59  // đánh dấu sự kiện do app tự gửi
     private static let deleteKeyCode: CGKeyCode = 51
-    private static let spaceKeyCode: Int64 = 49
-    private static let zKeyCode: Int64 = 6
+    private static let escKeyCode: Int64 = 53
     private static let modifierMask: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
 
     /// Trạng thái dùng chung giữa luồng chính, luồng bắt phím và hàng đợi đọc AX.
@@ -54,7 +64,11 @@ final class KeyboardHook {
     private var config: HookConfig
     private var contextID: String?
     private var modifierHotkeyArmed = false
+    private var tempKeyArmed = false
     private var lastContextRequest: TimeInterval = 0
+    /// Từ đang gõ khi app ở chế độ tiếng Anh (engine không chạy), chỉ để tra gõ tắt.
+    private var plainWord: [Character] = []
+    private var capitalizer = SentenceCapitalizer()
 
     // Chỉ dùng trên contextQueue
     private var lastContextRead: TimeInterval = 0
@@ -163,15 +177,17 @@ final class KeyboardHook {
     private func handlePassive(type: CGEventType, event: CGEvent) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            Log.add("Tap listen-only bị macOS tắt (\(type == .tapDisabledByTimeout ? "quá giờ" : "người dùng")), bật lại")
             DispatchQueue.main.async { [weak self] in
                 guard let tap = self?.listenTap, AXIsProcessTrusted() else { return }
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            engine.reset()
+            resetWord()
+            tempKeyArmed = false
             requestContextRefresh(after: 0.05)
         case .flagsChanged:
-            handleModifierHotkey(event.flags.intersection(Self.modifierMask))
+            handleModifierFlags(event.flags.intersection(Self.modifierMask))
         default:
             break
         }
@@ -181,7 +197,8 @@ final class KeyboardHook {
         let pass = Unmanaged.passUnretained(event)
         guard type == .keyDown else {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                engine.reset()
+                resetWord()
+                Log.add("Tap bắt phím bị macOS tắt (\(type == .tapDisabledByTimeout ? "quá giờ" : "người dùng")), bật lại")
                 // Bật lại trễ một nhịp, và chỉ khi vẫn còn quyền — tránh vòng lặp treo.
                 DispatchQueue.main.async { [weak self] in
                     guard let tap = self?.keyTap, AXIsProcessTrusted() else { return }
@@ -193,6 +210,7 @@ final class KeyboardHook {
 
         if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticMarker { return pass }
         modifierHotkeyArmed = false
+        tempKeyArmed = false
 
         syncShared()
         let config = self.config, contextID = self.contextID
@@ -200,22 +218,38 @@ final class KeyboardHook {
         let flags = event.flags.intersection(Self.modifierMask)
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-        if isHotkey(config.hotkey, keyCode: keyCode, flags: flags) {
-            engine.reset()
+        if config.hotkey.matches(keyCode: Int(keyCode), modifiers: flags.rawValue) {
+            resetWord()
             DispatchQueue.main.async { [weak self] in self?.onToggle?(contextID) }
             return nil
         }
 
         if !flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty {
             // ⌘Space (Spotlight), ⌘Tab… có thể đổi nơi nhận phím; cửa sổ mới hiện ra sau một nhịp.
-            engine.reset()
+            resetWord()
             requestContextRefresh(after: 0.15)
             requestContextRefresh(after: 0.6)
             return pass
         }
 
+        let method = config.method(for: contextID)
+
         if keyCode == Int64(Self.deleteKeyCode) {
             if !engine.backspace() { engine.reset() }
+            if !plainWord.isEmpty { plainWord.removeLast() }
+            capitalizer.reset()
+            return pass
+        }
+
+        if keyCode == Self.escKeyCode {
+            // Esc trả lại phím gốc cho từ đang gõ ("mĩ" → "mix"); khi đó Esc không đi tiếp,
+            // để không đóng luôn ô Spotlight hay hộp thoại. Không có gì để trả thì Esc đi qua như thường.
+            if config.escRestore && method != nil, let r = engine.restoreRaw() {
+                send(r, to: target(proxy: proxy))
+                return nil
+            }
+            resetWord()
+            requestContextRefresh(after: 0.15)
             return pass
         }
 
@@ -223,45 +257,92 @@ final class KeyboardHook {
         var unit: UniChar = 0
         event.keyboardGetUnicodeString(maxStringLength: 1, actualStringLength: &length, unicodeString: &unit)
         guard length == 1, unit < 0x80, let scalar = Unicode.Scalar(unit) else {
-            // Esc, Return, Tab, phím mũi tên, ký tự ngoài ASCII… — có thể đóng Spotlight hoặc chuyển ô nhập
-            engine.reset()
+            // Phím mũi tên, ký tự ngoài ASCII… — có thể chuyển ô nhập
+            resetWord()
             requestContextRefresh(after: 0.15)
             return pass
         }
-        let ch = Character(scalar)
+        var ch = Character(scalar)
 
-        if engine.isEmpty {
+        if engine.isEmpty && plainWord.isEmpty {
             // Lưới an toàn: đầu mỗi từ, nếu lâu chưa đọc lại ngữ cảnh thì đọc (không chặn phím này).
             if ProcessInfo.processInfo.systemUptime - lastContextRequest > 5 { requestContextRefresh() }
         }
 
-        guard let method = config.method(for: contextID) else {
+        // Space, dấu câu, Enter, Tab kết thúc từ: có thể phải sửa từ vừa gõ ("ủe" → "user") hoặc thay gõ tắt.
+        let endsWord = unit >= 0x20 || unit == 0x0D || unit == 0x09 || unit == 0x03
+        let triggersMacro = endsWord && !ch.isNumber && !config.macros.isEmpty
+
+        guard let method else {
+            // Tiếng Anh: không thêm dấu, chỉ tra gõ tắt.
             engine.reset()
+            if ch.isLetter || ch.isNumber {
+                plainWord.append(ch)
+                return pass
+            }
+            let word = String(plainWord)
+            plainWord = []
+            if triggersMacro && config.macrosInEnglish, let text = MacroExpander.expand(word, table: config.macros) {
+                return replace(EditResult(backspaces: word.count, text: text), thenRepost: event, proxy: proxy)
+            }
             return pass
         }
+        plainWord = []
         if engine.method != method { engine.reset(); engine.method = method }
         engine.modernToneStyle = config.modernToneStyle
         engine.autoRestoreEnglish = config.autoRestoreEnglish
+        engine.quickTelex = config.quickTelex
+        engine.quickStartConsonant = config.quickStartConsonant
+        engine.quickEndConsonant = config.quickEndConsonant
 
-        let fix = contextID.map { config.fixAutocompleteApps.contains($0) } ?? false
+        var capitalized = false
+        if ch.isLetter && config.autoCapitalize && capitalizer.takeLetter() && ch.isLowercase {
+            ch = Character(ch.uppercased())
+            capitalized = true
+        }
+
         guard let result = engine.process(ch) else {
-            // Space, dấu câu, Enter, Tab kết thúc từ: có thể phải sửa từ vừa gõ ("ủe" → "user").
-            // Phím gốc được gửi lại sau phần sửa để chắc chắn đi sau nó. Esc… thì chỉ bỏ từ.
-            let endsWord = unit >= 0x20 || unit == 0x0D || unit == 0x09 || unit == 0x03
-            if endsWord, let finish = engine.finishWord(), let copy = event.copy() {
-                send(finish, fixAutocomplete: fix, proxy: proxy)
-                copy.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
-                copy.tapPostEvent(proxy)
-                return nil
+            if config.autoCapitalize { capitalizer.didType(ch) }
+            if triggersMacro, let text = macroExpansion() {
+                let edit = EditResult(backspaces: engine.currentWord.count, text: text)
+                engine.reset()
+                return replace(edit, thenRepost: event, proxy: proxy)
+            }
+            if endsWord, let finish = engine.finishWord() {
+                return replace(finish, thenRepost: event, proxy: proxy)
             }
             engine.reset()
             return pass
         }
-        if result.backspaces == 0 && result.text.utf8.count == 1 && result.text.utf8.first == UInt8(unit) {
+        if !capitalized && result.backspaces == 0 && result.text.utf8.count == 1 && result.text.utf8.first == UInt8(unit) {
             return pass  // không đổi gì — để phím gốc đi qua, ổn định nhất
         }
-        send(result, fixAutocomplete: fix, proxy: proxy)
+        send(result, to: target(proxy: proxy))
         return nil
+    }
+
+    /// Gõ tắt khớp với chữ trên màn hình ("ko") hoặc với phím đã gõ ("ddc" khi chữ hiện ra là "ddc").
+    private func macroExpansion() -> String? {
+        guard !engine.isEmpty else { return nil }
+        return MacroExpander.expand(engine.currentWord, table: config.macros)
+            ?? MacroExpander.expand(engine.typedKeys, table: config.macros)
+    }
+
+    /// Sửa từ vừa gõ rồi gửi lại chính phím kết thúc từ, để phím đó chắc chắn đi sau phần sửa.
+    private func replace(_ edit: EditResult, thenRepost event: CGEvent, proxy: CGEventTapProxy) -> Unmanaged<CGEvent>? {
+        send(edit, to: target(proxy: proxy))
+        guard let copy = event.copy() else { return Unmanaged.passUnretained(event) }
+        copy.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
+        copy.tapPostEvent(proxy)
+        return nil
+    }
+
+    /// Bỏ mọi thứ đang theo dõi về từ hiện tại: không còn biết chắc chữ trước con trỏ là gì.
+    private func resetWord() {
+        engine.reset()
+        engine.typeNextWordAsIs = false
+        plainWord = []
+        capitalizer.reset()
     }
 
     /// Chỉ chép cài đặt/ngữ cảnh khi chúng đổi (mọi thay đổi đều tăng resetGeneration),
@@ -272,33 +353,50 @@ final class KeyboardHook {
             s.resetGeneration == seen ? nil : (s.config, s.contextBundleID, s.resetGeneration)
         }) else { return }
         (config, contextID, seenResetGeneration) = snap
-        engine.reset()
+        resetWord()
     }
 
-    private func isHotkey(_ hotkey: Hotkey, keyCode: Int64, flags: CGEventFlags) -> Bool {
-        switch hotkey {
-        case .ctrlShift: return false
-        case .optionZ: return keyCode == Self.zKeyCode && flags == .maskAlternate
-        case .ctrlSpace: return keyCode == Self.spaceKeyCode && flags == .maskControl
-        case .cmdShiftSpace: return keyCode == Self.spaceKeyCode && flags == [.maskCommand, .maskShift]
+    /// Phím tắt chỉ gồm phím bổ trợ (vd ⌃⇧) và phím gõ nguyên phím (vd ⌥): nhấn rồi thả mà không gõ
+    /// phím nào khác thì mới tính. Thêm một phím bổ trợ khác giữa chừng là huỷ.
+    private func handleModifierFlags(_ flags: CGEventFlags) {
+        syncShared()
+        let mods = flags.rawValue & HotkeySpec.allModifiers
+        let hotkey = config.hotkey
+        if hotkey.keyCode == nil {
+            if mods == hotkey.modifiers {
+                modifierHotkeyArmed = true
+            } else if mods == 0 {
+                if modifierHotkeyArmed {
+                    modifierHotkeyArmed = false
+                    resetWord()
+                    let contextID = self.contextID
+                    DispatchQueue.main.async { [weak self] in self?.onToggle?(contextID) }
+                }
+            } else if mods & ~hotkey.modifiers != 0 {
+                modifierHotkeyArmed = false
+            }
+        }
+        if let key = config.tempEnglishModifiers {
+            if mods == key {
+                tempKeyArmed = true
+            } else if mods == 0 {
+                if tempKeyArmed {
+                    tempKeyArmed = false
+                    typeWordAsIs()
+                }
+            } else {
+                tempKeyArmed = false
+            }
         }
     }
 
-    /// ⌃⇧: nhấn rồi thả mà không gõ phím nào khác thì mới đảo.
-    private func handleModifierHotkey(_ flags: CGEventFlags) {
-        syncShared()
-        guard config.hotkey == .ctrlShift else { return }
-        let contextID = self.contextID
-        if flags == [.maskControl, .maskShift] {
-            modifierHotkeyArmed = true
-        } else if flags.isEmpty {
-            if modifierHotkeyArmed {
-                modifierHotkeyArmed = false
-                engine.reset()
-                DispatchQueue.main.async { [weak self] in self?.onToggle?(contextID) }
-            }
-        } else if !flags.isSubset(of: [.maskControl, .maskShift]) {
-            modifierHotkeyArmed = false
+    /// Đang gõ dở: trả từ về phím gốc. Chưa gõ gì: từ kế tiếp gõ nguyên phím.
+    private func typeWordAsIs() {
+        guard config.method(for: contextID) != nil else { return }
+        if let r = engine.restoreRaw() {
+            send(r, to: target(proxy: nil))
+        } else if engine.isEmpty {
+            engine.typeNextWordAsIs = true
         }
     }
 
@@ -341,27 +439,46 @@ final class KeyboardHook {
 
     // MARK: - Gửi phím
 
-    private func send(_ result: EditResult, fixAutocomplete: Bool, proxy: CGEventTapProxy) {
-        var backspaces = result.backspaces
-        if backspaces > 0 && fixAutocomplete {
-            // Gõ một ký tự "vô hại" để huỷ phần gợi ý đang bôi đen, rồi xoá luôn nó.
-            postText("\u{202F}", proxy: proxy)
-            backspaces += 1
-        }
-        for _ in 0..<backspaces {
-            postKey(Self.deleteKeyCode, proxy: proxy)
-        }
-        if !result.text.isEmpty {
-            postText(result.text, proxy: proxy)
+    /// Nơi gửi phím. `proxy` nil (gọi từ tap listen-only): gửi vào phiên, vẫn đi qua tap bắt phím
+    /// nhưng được bỏ qua nhờ dấu syntheticMarker.
+    private struct Target {
+        var proxy: CGEventTapProxy?
+        var fixAutocomplete: Bool
+        var stepByStep: Bool
+
+        func post(_ e: CGEvent) {
+            if let proxy { e.tapPostEvent(proxy) } else { e.post(tap: .cgSessionEventTap) }
         }
     }
 
-    private func postKey(_ code: CGKeyCode, proxy: CGEventTapProxy) {
+    private func target(proxy: CGEventTapProxy?) -> Target {
+        let id = contextID
+        return Target(proxy: proxy,
+                      fixAutocomplete: id.map { config.fixAutocompleteApps.contains($0) } ?? false,
+                      stepByStep: id.map { config.stepByStepApps.contains($0) } ?? false)
+    }
+
+    private func send(_ result: EditResult, to target: Target) {
+        var backspaces = result.backspaces
+        if backspaces > 0 && target.fixAutocomplete {
+            // Gõ một ký tự "vô hại" để huỷ phần gợi ý đang bôi đen, rồi xoá luôn nó.
+            postText("\u{202F}", to: target)
+            backspaces += 1
+        }
+        for _ in 0..<backspaces {
+            postKey(Self.deleteKeyCode, to: target)
+        }
+        if !result.text.isEmpty {
+            postText(result.text, to: target)
+        }
+    }
+
+    private func postKey(_ code: CGKeyCode, to target: Target) {
         for down in [true, false] {
             guard let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { continue }
             e.flags = .maskNonCoalesced
             e.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
-            e.tapPostEvent(proxy)
+            target.post(e)
         }
     }
 
@@ -375,21 +492,23 @@ final class KeyboardHook {
     /// Chữ gửi bằng mã phím ở trên + chuỗi Unicode (giống OpenKey). Không dùng mã phím thật
     /// của chữ cái: nhiều ứng dụng dịch lại từ mã phím và gõ ra chữ gốc (vd "ư" thành "w").
     /// Cờ phải giữ NonCoalesced, nếu xoá sạch hệ thống có thể gộp/bỏ phím gửi liên tiếp.
-    private func postText(_ text: String, proxy: CGEventTapProxy) {
+    /// Bình thường gửi tối đa 16 ký tự mỗi sự kiện; ứng dụng bật "gửi từng phím" thì mỗi sự kiện một ký tự.
+    private func postText(_ text: String, to target: Target) {
         let units = Array(text.utf16)
         let keyCode = Self.textKeyCode()
+        let size = target.stepByStep ? 1 : 16
         var start = 0
         while start < units.count {
             // Không cắt đôi cặp surrogate
-            var end = min(start + 16, units.count)
-            if end < units.count && UTF16.isLeadSurrogate(units[end - 1]) { end -= 1 }
+            var end = min(start + size, units.count)
+            if end < units.count && UTF16.isLeadSurrogate(units[end - 1]) { end = end - 1 > start ? end - 1 : end + 1 }
             var chunk = Array(units[start..<end])
             for down in [true, false] {
                 guard let e = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: down) else { continue }
                 e.flags = .maskNonCoalesced
                 e.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
                 e.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
-                e.tapPostEvent(proxy)
+                target.post(e)
             }
             start = end
         }
