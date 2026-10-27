@@ -44,9 +44,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             .store(in: &cancellables)
 
+        // Cửa sổ của chính SenKey (Cài đặt, Hướng dẫn) luôn theo kiểu gõ mặc định. Bản cũ để phím tắt bấm
+        // trong đó tắt tiếng Việt cho chính SenKey mà menu bar không báo; xoá cài đặt sinh ra từ lỗi đó.
+        if let own = Bundle.main.bundleIdentifier, settings.rules[own] != nil {
+            settings.rules.removeValue(forKey: own)
+        }
+
         hook.onToggle = { [weak self] bundleID in
             guard let self else { return }
-            let id = bundleID ?? self.targetApp?.bundleIdentifier
+            // Phím tắt bấm trong cửa sổ SenKey áp dụng cho app đang làm việc, đúng như biểu tượng Vi/En.
+            let own = bundleID != nil && bundleID == Bundle.main.bundleIdentifier
+            let id = own ? self.targetApp?.bundleIdentifier : bundleID ?? self.targetApp?.bundleIdentifier
             guard let id else { return }
             self.settings.toggle(for: id, name: Self.appName(for: id))
             NSSound(named: "Tink")?.play()
