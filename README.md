@@ -9,7 +9,7 @@ Telex · VNI · Simple Telex · VIQR · gõ tắt · kiểu gõ riêng cho từn
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
 ![Swift 5](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
 ![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-4B8BBE)
-![Tests](https://img.shields.io/badge/tests-187%2F187%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-193%2F193%20passing-2ea44f)
 ![Speed](https://img.shields.io/badge/engine-~1.2%C2%B5s%2Fph%C3%ADm-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -178,7 +178,7 @@ SenKey/
 │   │   ├── OnboardingView.swift            # cửa sổ hướng dẫn lần đầu
 │   │   ├── Updater.swift                   # tự cập nhật (kiểm chữ ký giống get.sh)
 │   │   └── Diagnostics.swift               # nhật ký sự kiện, báo lỗi
-│   └── EngineTests/main.swift              # 187 test mô phỏng gõ, chạy tự động khi build
+│   └── EngineTests/main.swift              # 193 test mô phỏng gõ, chạy tự động khi build
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
 ├── Tools/EnglishWords/                     # sinh lại từ điển tiếng Anh
 ├── .github/workflows/build.yml             # CI: test + build trên macOS mỗi lần push
