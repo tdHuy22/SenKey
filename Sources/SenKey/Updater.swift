@@ -161,7 +161,7 @@ final class Updater {
         else { return false }
         let designated = run("/usr/bin/codesign", ["-dr", "-", app.path]).output
             .split(separator: "\n").first(where: { $0.hasPrefix("designated") })
-        return designated.map(String.init) == "designated => " + requirement.dropFirst()
+        return designated.map { String($0) } == "designated => " + String(requirement.dropFirst())
     }
 
     /// Chờ SenKey thoát rồi thay app: chép bản mới cạnh bản cũ trước, đổi chỗ sau cùng, lỗi thì mở lại bản cũ.

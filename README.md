@@ -4,12 +4,12 @@
 
 **Bộ gõ tiếng Việt cho macOS: nhẹ, ổn định, không lặp chữ**
 
-Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân (marked text)
+Telex · VNI · Simple Telex · VIQR · gõ tắt · kiểu gõ riêng cho từng ứng dụng · không gạch chân (marked text)
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
 ![Swift 5](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
 ![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-4B8BBE)
-![Tests](https://img.shields.io/badge/tests-108%2F108%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-187%2F187%20passing-2ea44f)
 ![Speed](https://img.shields.io/badge/engine-~1.2%C2%B5s%2Fph%C3%ADm-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -23,11 +23,14 @@ Telex · VNI · kiểu gõ riêng cho từng ứng dụng · không gạch chân
 
 |  |  |
 |---|---|
-| ⌨️ **Telex & VNI** | Đặt dấu kiểu mới (`hoà`) hoặc kiểu cũ (`hòa`), kiểm tra âm tiết hợp lệ |
+| ⌨️ **Telex, VNI, Simple Telex, VIQR** | Đặt dấu kiểu mới (`hoà`) hoặc kiểu cũ (`hòa`), kiểm tra âm tiết hợp lệ |
+| ✂️ **Gõ tắt** | `ko` → `không`, `Ko` → `Không`, `KO` → `KHÔNG`; chèn ngày giờ bằng `{date}`, `{time}`; dùng được cả khi gõ tiếng Anh |
+| ⚡ **Gõ nhanh** | Quick Telex (`cc` → `ch`, `nn` → `ng`…), phụ âm đầu/cuối gõ tắt (`f` → `ph`, `g` → `ng`…), tự viết hoa đầu câu. Tắt sẵn, bật trong Cài đặt |
 | 🎯 **Riêng cho từng app** | VS Code gõ tiếng Anh, Messenger gõ Telex, Excel gõ VNI. SenKey tự nhớ |
 | 🚫 **Không marked text** | Không có chữ gạch chân, không lặp chữ kiểu `viêviệt` |
 | 🌐 **Sửa lỗi ô gợi ý** | Thanh địa chỉ Chrome / Safari / Firefox / Edge / Arc / Cốc Cốc, Spotlight, Raycast, Alfred, Excel |
-| 🔤 **Tự khôi phục tiếng Anh** | `windows`, `google`, `facebook` vẫn là chính nó; gõ xong từ mà không ra tiếng Việt (`user`, `text`) cũng được trả lại |
+| 🔤 **Tự khôi phục tiếng Anh** | Từ điển 1.433 từ: `different`, `message`, `more`, `data` vẫn là chính nó. Từ trùng tiếng Việt (`this` → `thí`) thì nhấn **Esc** để lấy lại tiếng Anh |
+| 🔄 **Tự cập nhật** | Mỗi ngày hỏi GitHub một lần, kiểm chữ ký trước khi cài. Tắt được |
 | ⚡ **Siêu nhẹ** | Engine xử lý mỗi phím trong khoảng 1,2 µs, app nằm gọn trên menu bar |
 | 🛡️ **An toàn** | Tự gỡ bộ bắt phím trong 0,5 giây khi mất quyền Trợ năng, không làm treo máy |
 
@@ -111,9 +114,16 @@ chữ ký ghim trong `get.sh`. Repo bật immutable releases, nên đăng bản 
 | Nhìn biểu tượng **Vi / En** trên menu bar | Trạng thái của ứng dụng đang dùng |
 | Nhấn rồi thả **⌃⇧** (Control + Shift) | Đảo Việt/Anh cho *riêng app hiện tại*, app tự ghi nhớ |
 | Menu → **Kiểu gõ cho ‹app›** | Theo mặc định · Telex · VNI · Tiếng Anh |
-| Menu → **Cài đặt & danh sách ứng dụng…** | Xem, sửa, xoá cài đặt của từng app |
+| Menu → **Cài đặt & danh sách ứng dụng…** | Bốn thẻ: Bộ gõ · Gõ tắt · Ứng dụng · Hệ thống |
+| Nhấn **Esc** khi đang gõ dở | Từ trở về đúng phím đã gõ (`mĩ` → `mix`), phần còn lại của từ gõ nguyên phím |
+| Nhấn rồi thả riêng **⌥ Option** | Như Esc nếu đang gõ dở; chưa gõ gì thì từ kế tiếp gõ nguyên phím. Đổi sang ⌃ hoặc tắt trong Cài đặt |
+| Menu → **Báo lỗi…** | Mở trang báo lỗi, chép sẵn thông tin máy và nhật ký (không có phím bạn gõ) để dán vào |
 
-Phím tắt có thể đổi sang **⌥Z**, **⌃Space** hoặc **⌘⇧Space** trong Cài đặt.
+Phím tắt đảo Việt/Anh có thể đổi sang **⌥Z**, **⌃Space**, **⌘⇧Space** hoặc tự ghi một tổ hợp bất kỳ trong **Cài đặt → Hệ thống**.
+Ứng dụng nào gõ ra sai hoặc thiếu chữ thì bật **Từng phím** cho nó trong **Cài đặt → Ứng dụng**.
+**Cài đặt → Hệ thống → Xuất cài đặt** lưu mọi thứ (cả gõ tắt) ra một file để chuyển sang máy khác.
+
+**VIQR:** `a'` á · ``a` `` à · `a?` ả · `a~` ã · `a.` ạ · `a^` â · `a(` ă · `o+` ơ · `dd` đ. Muốn gõ dấu câu ngay sau chữ thì thêm `\` (`đi\.` → `đi.`).
 
 ## 🧠 Vì sao ổn định hơn
 
@@ -139,6 +149,8 @@ flowchart LR
 - Lời hỏi mật khẩu trong Terminal (`sudo`, `ssh`) không phải ô mật khẩu thật, nên SenKey vẫn thêm dấu (`password` thành `pasword`).
   Chuyển sang **En** trước khi gõ mật khẩu ở đó, hoặc đặt Terminal ở chế độ tiếng Anh.
 - Sau khi nhấn Space rồi Backspace quay lại từ trước, cần gõ lại cả từ để thêm dấu.
+- Từ tiếng Anh trùng một từ Việt có thật (`this` → `thí`, `has` → `há`) giữ dạng tiếng Việt, vì Telex chỉ có đúng cách gõ đó. Nhấn **Esc** để lấy lại tiếng Anh.
+- Tự cập nhật chỉ chạy với bản phát hành chính thức. Bản tự build thì cập nhật bằng lệnh cài một dòng.
 
 ## 🗑️ Gỡ cài đặt
 
@@ -153,15 +165,23 @@ Nếu cài từ mã nguồn, chạy `./uninstall.sh`: script làm cả ba bướ
 ```
 SenKey/
 ├── Sources/
-│   ├── VietEngine/VietnameseEngine.swift   # Telex/VNI, vị trí dấu, kiểm tra hợp lệ, backspace
+│   ├── VietEngine/
+│   │   ├── VietnameseEngine.swift          # Telex/VNI/Simple Telex/VIQR, vị trí dấu, kiểm tra hợp lệ, backspace
+│   │   ├── EnglishWords.swift              # từ điển tiếng Anh (sinh bằng Tools/EnglishWords/generate.sh)
+│   │   ├── TextExpansion.swift             # gõ tắt, viết hoa đầu câu
+│   │   └── HotkeySpec.swift                # phím tắt tuỳ chỉnh, so sánh phiên bản
 │   ├── SenKey/
 │   │   ├── KeyboardHook.swift              # CGEventTap, gửi Backspace + Unicode, phím tắt
 │   │   ├── Settings.swift                  # cài đặt theo ứng dụng (UserDefaults)
 │   │   ├── AppDelegate.swift               # menu bar
 │   │   ├── SettingsView.swift              # cửa sổ cài đặt (SwiftUI)
-│   │   └── OnboardingView.swift            # cửa sổ hướng dẫn lần đầu
-│   └── EngineTests/main.swift              # 108 test mô phỏng gõ, chạy tự động khi build
+│   │   ├── OnboardingView.swift            # cửa sổ hướng dẫn lần đầu
+│   │   ├── Updater.swift                   # tự cập nhật (kiểm chữ ký giống get.sh)
+│   │   └── Diagnostics.swift               # nhật ký sự kiện, báo lỗi
+│   └── EngineTests/main.swift              # 187 test mô phỏng gõ, chạy tự động khi build
 ├── Tools/KeyProbe/                         # công cụ ghi log sự kiện phím để debug
+├── Tools/EnglishWords/                     # sinh lại từ điển tiếng Anh
+├── .github/workflows/build.yml             # CI: test + build trên macOS mỗi lần push
 ├── build.sh · install.sh · uninstall.sh · make-cert.sh
 ├── get.sh · package.sh                     # cài bằng một lệnh (kiểm chữ ký) · đóng gói bản phát hành
 ├── SECURITY.md                             # báo lỗi bảo mật, cách kiểm bản cài

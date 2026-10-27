@@ -369,7 +369,7 @@ private struct SystemTab: View {
                             settings.customHotkey = spec
                             settings.hotkey = .custom
                         }
-                        recorder.recording ? recorder.stop() : recorder.start()
+                        if recorder.recording { recorder.stop() } else { recorder.start() }
                     }
                     if let message = recorder.message {
                         Text(message).font(.caption).foregroundStyle(.orange)
@@ -390,10 +390,10 @@ private struct SystemTab: View {
             Section {
                 HStack {
                     Button("Xuất cài đặt…") { transfer.export(settings) }
-                    Button("Nhập cài đặt…") { transfer.import(into: settings) }
+                    Button("Nhập cài đặt…") { transfer.importSettings(into: settings) }
                 }
                 if let message = transfer.message {
-                    Text(message).font(.caption).foregroundStyle(transfer.failed ? .red : .secondary)
+                    Text(message).font(.caption).foregroundStyle(transfer.failed ? Color.red : Color.secondary)
                 }
             } header: {
                 Text("Sao lưu")
@@ -431,7 +431,7 @@ final class TransferModel: ObservableObject {
         }
     }
 
-    func `import`(into settings: Settings) {
+    func importSettings(into settings: Settings) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
