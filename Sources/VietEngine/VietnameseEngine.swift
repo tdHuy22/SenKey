@@ -364,7 +364,7 @@ public final class VietnameseEngine {
     }
 
     /// Kiểm chặt khi từ đã gõ xong: vần phải có thật (tính cả mũ/móc), và vần kết thúc bằng
-    /// c, ch, p, t chỉ mang dấu sắc hoặc nặng.
+    /// c, ch, p, t không mang dấu huyền, hỏi, ngã.
     private func isCompleteSyllable() -> Bool {
         guard isValidSyllable() else { return false }
         let p = split()
@@ -376,7 +376,8 @@ public final class VietnameseEngine {
         guard Self.closedRimes.contains(rime) else { return false }
         let fin = String(chars[p.final].map { $0.base })
         if (fin == "ch" || fin == "nh") && !Self.palatalRimes.contains(rime) { return false }
-        if ["c", "ch", "p", "t"].contains(fin) { return tone == .sac || tone == .nang }
+        // Thiếu dấu ("đươc") thì để nguyên cho người dùng tự sửa; chỉ dấu sai ("tẽt") mới trả lại phím gốc
+        if ["c", "ch", "p", "t"].contains(fin) { return tone == .none || tone == .sac || tone == .nang }
         return true
     }
 
