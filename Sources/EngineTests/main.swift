@@ -2,13 +2,28 @@ import Foundation
 
 
 /// Mô phỏng màn hình: áp từng EditResult giống như app thật gửi phím.
-func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = true, restore: Bool = true) -> String {
+/// "<" là Backspace, "⎋" là Esc, "⌥" là nhấn-thả Option (gõ nguyên phím từ kế tiếp).
+func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = true, restore: Bool = true,
+               setup: (VietnameseEngine) -> Void = { _ in }) -> String {
     let engine = VietnameseEngine(method: method, modernToneStyle: modern, autoRestoreEnglish: restore)
+    setup(engine)
     var screen: [Character] = []
+    func apply(_ r: EditResult) {
+        screen.removeLast(r.backspaces)
+        screen.append(contentsOf: r.text)
+    }
     for ch in input {
         if ch == "<" { // Backspace
             if !engine.backspace() { engine.reset() }
             if !screen.isEmpty { screen.removeLast() }
+            continue
+        }
+        if ch == "⎋" {
+            if let r = engine.restoreRaw() { apply(r) } else { engine.reset() }
+            continue
+        }
+        if ch == "⌥" {
+            if let r = engine.restoreRaw() { apply(r) } else if engine.isEmpty { engine.typeNextWordAsIs = true }
             continue
         }
         if let r = engine.process(ch) {
@@ -28,9 +43,10 @@ func typeWords(_ input: String, method: InputMethod = .telex, modern: Bool = tru
 
 var failures = 0
 var total = 0
-func check(_ input: String, _ expected: String, _ method: InputMethod = .telex, modern: Bool = true, restore: Bool = true) {
+func check(_ input: String, _ expected: String, _ method: InputMethod = .telex, modern: Bool = true, restore: Bool = true,
+           setup: (VietnameseEngine) -> Void = { _ in }) {
     total += 1
-    let got = typeWords(input, method: method, modern: modern, restore: restore)
+    let got = typeWords(input, method: method, modern: modern, restore: restore, setup: setup)
     if got != expected {
         failures += 1
         print("FAIL [\(method.displayName)] \"\(input)\" → \"\(got)\" (mong đợi \"\(expected)\")")
@@ -150,6 +166,60 @@ check("2024", "2024", .vni)
 check("tie61ng", "tiếng", .vni)
 check("khuye6n3", "khuyển", .vni)
 check("xoa8n1", "xoắn", .vni)
+// Simple Telex: không có "w" đứng riêng
+check("tuw", "tư", .simpleTelex)
+check("w", "w", .simpleTelex)
+check("nguowif", "người", .simpleTelex)
+check("dduowcj", "được", .simpleTelex)
+check("wow ", "wow ", .simpleTelex)
+// VIQR
+check("vie^.t nam", "việt nam", .viqr)
+check("ddu+o+.c", "được", .viqr)
+check("ngu+o+`i", "người", .viqr)
+check("hoa`", "hoà", .viqr)
+check("Tie^'ng Vie^.t", "Tiếng Việt", .viqr)
+check("a(n", "ăn", .viqr)
+check("a''", "a'", .viqr)
+check("di. ", "dị ", .viqr)
+check("ddi\\. ", "đi. ", .viqr)
+check("sao? ", "sảo ", .viqr)
+check("ok? ", "ok? ", .viqr)
+check("no' ", "nó ", .viqr)
+check("x.y", "x.y", .viqr)
+// Quick Telex
+let quick: (VietnameseEngine) -> Void = { $0.quickTelex = true }
+check("ccaf ", "chà ", setup: quick)
+check("gga ", "gia ", setup: quick)
+check("kkoong ", "không ", setup: quick)
+check("nnuwowif ", "người ", setup: quick)
+check("qqaf ", "quà ", setup: quick)
+check("ppowr ", "phở ", setup: quick)
+check("ttuw ", "thư ", setup: quick)
+check("Ccaof ", "Chào ", setup: quick)
+check("CCAOF ", "CHÀO ", setup: quick)
+check("cc ", "cc ", .vni, setup: quick)
+check("caf ", "cà ")  // tắt mặc định
+// Phụ âm đầu/cuối gõ tắt
+let qStart: (VietnameseEngine) -> Void = { $0.quickStartConsonant = true }
+check("foos ", "phố ", setup: qStart)
+check("jaf ", "già ", setup: qStart)
+check("waf ", "quà ", setup: qStart)
+check("Foos ", "Phố ", setup: qStart)
+let qEnd: (VietnameseEngine) -> Void = { $0.quickEndConsonant = true }
+check("ag ", "ang ", setup: qEnd)
+check("tihf ", "tình ", setup: qEnd)
+check("thiks ", "thích ", setup: qEnd)
+check("viek ", "viek ", setup: qEnd)  // "viêch" không phải tiếng Việt
+check("thuowg ", "thương ", setup: qEnd)
+check("ok ", "ok ", setup: qEnd)
+check("anh ", "anh ", setup: qEnd)
+// Esc trả lại phím gốc; Option: gõ nguyên phím từ kế tiếp
+check("mix⎋ ", "mix ")
+check("vieetj⎋ ", "vieetj ")
+check("mix⎋s ", "mixs ")
+check("viet⎋ ", "viet ")
+check("⌥mix tieengs", "mix tiếng")
+check("vieetj⌥ ", "vieetj ")
 
 print("\(total - failures)/\(total) test đạt")
 if failures > 0 { exit(1) }

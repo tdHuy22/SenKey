@@ -1,9 +1,19 @@
 import Foundation
 
 public enum InputMethod: String, Codable, CaseIterable {
-    case telex, vni
+    case telex, vni, simpleTelex, viqr
 
-    public var displayName: String { self == .telex ? "Telex" : "VNI" }
+    public var displayName: String {
+        switch self {
+        case .telex: return "Telex"
+        case .vni: return "VNI"
+        case .simpleTelex: return "Simple Telex"
+        case .viqr: return "VIQR"
+        }
+    }
+
+    /// Telex và Simple Telex dùng chung chữ cái làm dấu.
+    var isTelex: Bool { self == .telex || self == .simpleTelex }
 }
 
 /// Kết quả xử lý một phím: xoá `backspaces` ký tự trước con trỏ rồi chèn `text`.
@@ -49,6 +59,14 @@ public final class VietnameseEngine {
     public var modernToneStyle: Bool
     /// Tự trả lại phím gốc khi từ không thể là tiếng Việt (vd: "windows", "google").
     public var autoRestoreEnglish: Bool
+    /// Telex: gõ đôi phụ âm đầu từ ra phụ âm ghép (cc → ch, gg → gi, kk → kh, nn → ng, qq → qu, pp → ph, tt → th).
+    public var quickTelex = false
+    /// Phụ âm đầu gõ tắt: f → ph, j → gi, w → qu.
+    public var quickStartConsonant = false
+    /// Phụ âm cuối gõ tắt ngay sau nguyên âm: g → ng, h → nh, k → ch.
+    public var quickEndConsonant = false
+    /// Từ kế tiếp được gõ nguyên phím, không thêm dấu (nhấn-thả ⌥ trước khi gõ). Tự tắt sau một từ.
+    public var typeNextWordAsIs = false
 
     private var chars: [VChar] = []
     private var tone: Tone = .none
@@ -76,6 +94,7 @@ public final class VietnameseEngine {
     /// Xử lý một ký tự. Trả về nil nếu phím không thuộc về từ đang gõ (caller nên reset và cho phím đi qua).
     public func process(_ key: Character) -> EditResult? {
         guard key.isASCII else { return nil }
+        if method == .viqr && !key.isLetter && !key.isNumber { return processVIQRSymbol(key) }
         let isLetter = key.isLetter
         let isDigit = key.isNumber
         if !(isLetter || (isDigit && method == .vni && !chars.isEmpty)) {
@@ -84,14 +103,25 @@ public final class VietnameseEngine {
 
         let lower = Character(key.lowercased())
         let upper = key.isUppercase
+        if raw.isEmpty && typeNextWordAsIs {
+            typeNextWordAsIs = false
+            locked = true
+        }
         raw.append(key)
 
         if locked {
             chars.append(VChar(base: lower, upper: upper))
         } else {
-            let handled = method == .telex ? applyTelex(lower, upper: upper) : applyVNI(lower, upper: upper)
-            if !handled {
-                chars.append(VChar(base: lower, upper: upper))
+            if !applyQuickConsonant(lower, upper: upper) {
+                let handled: Bool
+                switch method {
+                case .telex, .simpleTelex: handled = applyTelex(lower, upper: upper)
+                case .vni: handled = applyVNI(lower, upper: upper)
+                case .viqr: handled = lower == "d" && applyStroke(key: lower, upper: upper)
+                }
+                if !handled && !applyQuickEnd(lower, upper: upper) {
+                    chars.append(VChar(base: lower, upper: upper))
+                }
             }
             if !locked && autoRestoreEnglish && !isValidSyllable() && render() != raw {
                 chars = raw.map { VChar(base: Character($0.lowercased()), upper: $0.isUppercase) }
@@ -122,6 +152,16 @@ public final class VietnameseEngine {
         }
         let result = commit()
         return result.backspaces == 0 && result.text.isEmpty ? nil : result
+    }
+
+    /// Esc: trả lại đúng các phím đã gõ cho từ hiện tại, phần còn lại của từ gõ nguyên phím.
+    /// Trả nil nếu từ đã đúng bằng phím gốc (khi đó Esc nên đi qua bình thường).
+    public func restoreRaw() -> EditResult? {
+        guard !screen.isEmpty, screen != raw else { return nil }
+        chars = raw.map { VChar(base: Character($0.lowercased()), upper: $0.isUppercase) }
+        tone = .none
+        locked = true
+        return commit()
     }
 
     /// Người dùng nhấn Backspace. Trả về false nếu engine không có gì để xoá.
@@ -159,7 +199,7 @@ public final class VietnameseEngine {
             if tone != .none && nucleus() != nil { tone = .none; return true }
             return false
         case "a", "e", "o": return applyCircumflex(target: k, key: k, upper: upper)
-        case "w": return applyHorn(key: k, upper: upper, allowBreve: true, standalone: true)
+        case "w": return applyHorn(key: k, upper: upper, allowBreve: true, standalone: method == .telex)
         case "d": return applyStroke(key: k, upper: upper)
         default: return false
         }
@@ -223,6 +263,73 @@ public final class VietnameseEngine {
             return undo(appending: key, upper: upper)
         }
         chars[idx].mark = .breve
+        return true
+    }
+
+    // MARK: - VIQR
+
+    /// a' á · a` à · a? ả · a~ ã · a. ạ · a^ â · a( ă · o+ ơ · dd đ. Gõ \ ngay sau từ để gõ tiếp nguyên phím (đi\. → "đi.").
+    private static let viqrSymbols: Set<Character> = ["'", "`", "?", "~", ".", "^", "(", "+", "\\"]
+
+    /// Ký hiệu VIQR chỉ thuộc về từ khi nó thật sự đổi được từ; nếu không ("đi?" khi đã có dấu…)
+    /// thì trả nil, phím đi qua như dấu câu bình thường.
+    private func processVIQRSymbol(_ key: Character) -> EditResult? {
+        guard Self.viqrSymbols.contains(key), !chars.isEmpty, !locked else { return nil }
+        if key == "\\" {
+            locked = true
+            return EditResult(backspaces: 0, text: "")  // nuốt dấu "\\"
+        }
+        let saved = (chars, tone, raw)
+        raw.append(key)
+        let handled: Bool
+        switch key {
+        case "'": handled = applyTone(.sac, key: key, upper: false)
+        case "`": handled = applyTone(.huyen, key: key, upper: false)
+        case "?": handled = applyTone(.hoi, key: key, upper: false)
+        case "~": handled = applyTone(.nga, key: key, upper: false)
+        case ".": handled = applyTone(.nang, key: key, upper: false)
+        case "^": handled = applyCircumflex(target: nil, key: key, upper: false)
+        case "(": handled = applyBreve(key: key, upper: false)
+        default: handled = applyHorn(key: key, upper: false, allowBreve: false, standalone: false)
+        }
+        if handled { return commit() }
+        (chars, tone, raw) = saved
+        return nil
+    }
+
+    // MARK: - Phụ âm gõ tắt
+
+    private static let quickTelexPairs: [Character: Character] = [
+        "c": "h", "g": "i", "k": "h", "n": "g", "q": "u", "p": "h", "t": "h",
+    ]
+    private static let quickStartPairs: [Character: (Character, Character)] = [
+        "f": ("p", "h"), "j": ("g", "i"), "w": ("q", "u"),
+    ]
+    private static let quickEndPairs: [Character: (Character, Character)] = [
+        "g": ("n", "g"), "h": ("n", "h"), "k": ("c", "h"),
+    ]
+
+    /// Đầu từ: "cc" → "ch" (Quick Telex), "f" → "ph" (phụ âm đầu gõ tắt).
+    private func applyQuickConsonant(_ k: Character, upper: Bool) -> Bool {
+        if quickStartConsonant && chars.isEmpty, let (a, b) = Self.quickStartPairs[k] {
+            chars.append(VChar(base: a, upper: upper))
+            chars.append(VChar(base: b, upper: false))
+            return true
+        }
+        if quickTelex && method.isTelex && chars.count == 1 && chars[0].base == k && chars[0].mark == .none,
+           let second = Self.quickTelexPairs[k] {
+            chars.append(VChar(base: second, upper: upper))
+            return true
+        }
+        return false
+    }
+
+    /// Ngay sau nguyên âm: "ag" → "ang", "ah" → "anh", "ak" → "ach".
+    private func applyQuickEnd(_ k: Character, upper: Bool) -> Bool {
+        guard quickEndConsonant, let (a, b) = Self.quickEndPairs[k], nucleus() != nil, split().final.isEmpty
+        else { return false }
+        chars.append(VChar(base: a, upper: upper))
+        chars.append(VChar(base: b, upper: upper))
         return true
     }
 
@@ -452,18 +559,25 @@ public final class VietnameseEngine {
             keys.append(base)
             switch (c.mark, method) {
             case (.none, _): break
-            case (.circumflex, .telex): keys.append(c.base)
-            case (.breve, .telex), (.horn, .telex): keys.append("w")
-            case (.stroke, .telex): keys.append("d")
+            case (.circumflex, .telex), (.circumflex, .simpleTelex): keys.append(c.base)
+            case (.breve, .telex), (.horn, .telex), (.breve, .simpleTelex), (.horn, .simpleTelex): keys.append("w")
+            case (.stroke, .telex), (.stroke, .simpleTelex), (.stroke, .viqr): keys.append("d")
             case (.circumflex, .vni): keys.append("6")
             case (.horn, .vni): keys.append("7")
             case (.breve, .vni): keys.append("8")
             case (.stroke, .vni): keys.append("9")
+            case (.circumflex, .viqr): keys.append("^")
+            case (.breve, .viqr): keys.append("(")
+            case (.horn, .viqr): keys.append("+")
             }
         }
         if tone != .none {
-            let telex: [Character] = ["s", "f", "r", "x", "j"]
-            keys.append(method == .telex ? telex[tone.rawValue - 1] : Character(String(tone.rawValue)))
+            let i = tone.rawValue - 1
+            switch method {
+            case .telex, .simpleTelex: keys.append(["s", "f", "r", "x", "j"][i])
+            case .vni: keys.append(Character(String(tone.rawValue)))
+            case .viqr: keys.append(["'", "`", "?", "~", "."][i])
+            }
         }
         raw = keys
     }
