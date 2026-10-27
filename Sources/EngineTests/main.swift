@@ -117,6 +117,13 @@ check("khuyru ", "khuỷu ")
 check("nguyeenx ", "nguyễn ")
 check("hoachj ", "hoạch ")
 check("thuowr ", "thuở ")
+// Vần "oeo": "o" sau "oe" là nguyên âm thứ ba, không phải mũ cho "o" đầu
+check("khoeof ", "khoèo ")
+check("ngoeoj ", "ngoẹo ")
+check("ngoejo ", "ngoẹo ")     // dấu gõ trước chữ "o" cuối
+check("NGOEOJ ", "NGOẸO ")
+check("khoeor ", "khoẻo ")
+check("ngoeo5 ", "ngoẹo ", .vni)
 check("huow ", "huơ ")
 check("thuowng ", "thương ")
 check("thuowr ", "thuở ", restore: false)

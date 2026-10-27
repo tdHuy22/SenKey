@@ -206,6 +206,12 @@ public final class VietnameseEngine {
     /// target: nguyên âm cần thêm mũ (Telex: aa/ee/oo). nil = nguyên âm a/e/o gần cuối nhất (VNI: 6).
     private func applyCircumflex(target: Character?, key: Character, upper: Bool) -> Bool {
         guard let nuc = nucleus() else { return false }
+        // Telex "o" sau "oe" chưa có dấu phụ, chưa có phụ âm cuối: nối thêm "o" thành vần "oeo"
+        // (khoèo, ngoẹo), không phải thêm mũ cho "o" đầu ("khồe").
+        if target == "o", nuc.count == 2, chars[nuc[0]].base == "o", chars[nuc[1]].base == "e",
+           nuc.allSatisfy({ chars[$0].mark == .none }), nuc[1] + 1 == chars.count {
+            return false
+        }
         let candidates: Set<Character> = target.map { [$0] } ?? ["a", "e", "o"]
         guard let idx = nuc.last(where: { candidates.contains(chars[$0].base) }) else { return false }
         if chars[idx].mark == .circumflex {
