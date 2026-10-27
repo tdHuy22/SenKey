@@ -1,0 +1,38 @@
+# Mỗi lần push hoặc mở PR: chạy test engine và biên dịch đủ app trên máy macOS thật.
+# Không dùng secret nào; app được ký ad-hoc (khoá ký "SenKey Dev" không bao giờ lên CI).
+name: Build & test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      # Ghim theo mã commit, không theo tag: tag có thể bị dời sang mã khác
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Phiên bản Swift và macOS
+        run: |
+          swiftc --version
+          sw_vers
+
+      - name: Test engine, biên dịch app universal
+        run: ./build.sh
+
+      - name: Kiểm app vừa build
+        run: |
+          codesign --verify --strict build/SenKey.app
+          archs=$(lipo -archs build/SenKey.app/Contents/MacOS/SenKey)
+          echo "Kiến trúc: $archs"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]]
+
+      - name: Biên dịch KeyProbe
+        run: swiftc -O -swift-version 5 -o build/KeyProbe Tools/KeyProbe/main.swift
