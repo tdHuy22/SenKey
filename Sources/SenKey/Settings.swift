@@ -161,7 +161,7 @@ final class Settings: ObservableObject {
         "com.github.wez.wezterm", "co.zeit.hyper", "org.tabby", "com.raphaelamorim.rio",
         // Điều khiển máy khác hay máy ảo: phím có thể vào terminal của máy đó.
         "com.apple.ScreenSharing", "com.microsoft.rdc.macos", "com.realvnc.rvncconnect",
-        "com.utmapp.UTM", "com.parallels.desktop.console",
+        "com.utmapp.UTM", "com.parallels.desktop.console", "com.termius-dmg.mac", "com.p5sys.jump.mac.viewer.web",
     ]
 
     @Published var defaultMethod: InputMethodChoice { didSet { save() } }
