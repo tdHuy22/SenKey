@@ -344,6 +344,14 @@ final class HotkeyRecorder: ObservableObject {
         }
     }
 
+    /// Nhãn của phím theo bàn phím đang dùng, dựng từ mã phím như lúc ghi phím. File nhập có thể ghi nhãn sai
+    /// (⌘V mà ghi "Z"), nên hộp thoại nhập dùng nhãn này thay cho nhãn trong file (TM-10).
+    static func label(forKeyCode code: Int) -> String? {
+        guard (0...127).contains(code), let cg = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: true),
+              let event = NSEvent(cgEvent: cg) else { return nil }
+        return label(event)
+    }
+
     private static func label(_ event: NSEvent) -> String {
         switch event.keyCode {
         case 49: return "Space"
@@ -460,6 +468,9 @@ final class TransferModel: ObservableObject {
         var s = imported.settings
         // Gõ tắt trong Terminal chỉ bật bằng tay, không lấy từ file (TM-9).
         s.macrosInTerminals = settings.macrosInTerminals
+        if let code = s.customHotkey.keyCode, let label = HotkeyRecorder.label(forKeyCode: code) {
+            s.customHotkey.keyLabel = label
+        }
         let hotkey = s.hotkey == .custom ? s.customHotkey.displayName : s.hotkey.displayName
         var text = "Cài đặt hiện tại sẽ bị thay bằng nội dung file:\n"
             + "• \(s.macros.count) gõ tắt\(s.macrosInEnglish ? ", chạy cả khi gõ tiếng Anh" : "")\n"
