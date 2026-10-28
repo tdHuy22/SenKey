@@ -159,6 +159,8 @@ final class Settings: ObservableObject {
         "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
         "com.mitchellh.ghostty", "net.kovidgoyal.kitty", "org.alacritty", "io.alacritty",
         "com.github.wez.wezterm", "co.zeit.hyper", "org.tabby", "com.raphaelamorim.rio",
+        // Điều khiển máy khác: phím có thể vào terminal của máy đó.
+        "com.apple.ScreenSharing", "com.microsoft.rdc.macos",
     ]
 
     @Published var defaultMethod: InputMethodChoice { didSet { save() } }
