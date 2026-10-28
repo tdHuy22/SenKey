@@ -79,7 +79,7 @@ enum BugReport {
         }
         func json(_ v: Any) -> String {
             guard JSONSerialization.isValidJSONObject(v),
-                  let d = try? JSONSerialization.data(withJSONObject: v, options: [.sortedKeys]) else { return "\(v)" }
+                  let d = try? JSONSerialization.data(withJSONObject: v, options: [.sortedKeys, .withoutEscapingSlashes]) else { return "\(v)" }
             return String(decoding: d, as: UTF8.self)
         }
         let parts = text.split(separator: "\n", maxSplits: 1)
@@ -104,7 +104,9 @@ enum BugReport {
             }
         }
         if out.isEmpty { return "(không đọc được báo cáo crash)" }
+        // Thư mục home có thể nằm ở chỗ khác /Users/<tên> (hoặc là người dùng khác), nên thay cả hai.
         return out.joined(separator: "\n").replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            .replacingOccurrences(of: #"/Users/[^/\s"]+"#, with: "~", options: .regularExpression)
     }
 
     static func open(settings: Settings, hookInstalled: Bool) {

@@ -23,8 +23,14 @@ public struct Macro: Codable, Equatable, Identifiable {
             && !Self.hasControl(abbreviation) && !Self.hasControl(text)
     }
 
+    /// Ký tự điều khiển, ngắt dòng, và ký tự vô hình làm chữ hiện khác nội dung thật (đảo chiều, khoảng trắng rộng 0).
+    /// Không chặn cả nhóm Cf vì ZWJ (U+200D) cần cho emoji ghép.
     public static func hasControl(_ s: String) -> Bool {
-        s.unicodeScalars.contains { [.control, .lineSeparator, .paragraphSeparator].contains($0.properties.generalCategory) }
+        s.unicodeScalars.contains {
+            [.control, .lineSeparator, .paragraphSeparator].contains($0.properties.generalCategory)
+                || (0x200B...0x200C).contains($0.value) || (0x200E...0x200F).contains($0.value)
+                || (0x202A...0x202E).contains($0.value) || (0x2066...0x2069).contains($0.value) || $0.value == 0x061C
+        }
     }
 }
 

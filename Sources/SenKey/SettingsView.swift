@@ -457,10 +457,12 @@ final class TransferModel: ObservableObject {
             return
         }
         // Gõ tắt trong file sẽ được SenKey gõ ra ở mọi app, nên cho người dùng thấy file làm gì trước khi áp dụng (TM-9, TM-10).
-        let s = imported.settings
+        var s = imported.settings
+        // Gõ tắt trong Terminal chỉ bật bằng tay, không lấy từ file (TM-9).
+        s.macrosInTerminals = settings.macrosInTerminals
         let hotkey = s.hotkey == .custom ? s.customHotkey.displayName : s.hotkey.displayName
         var text = "Cài đặt hiện tại sẽ bị thay bằng nội dung file:\n"
-            + "• \(s.macros.count) gõ tắt\(s.macrosInEnglish ? ", chạy cả khi gõ tiếng Anh" : "")\(s.macrosInTerminals ? ", CHẠY CẢ TRONG TERMINAL" : "")\n"
+            + "• \(s.macros.count) gõ tắt\(s.macrosInEnglish ? ", chạy cả khi gõ tiếng Anh" : "")\n"
             + "• \(s.rules.count) ứng dụng có cài đặt riêng\n"
             + "• Phím tắt đảo Việt/Anh: \(hotkey)\n"
             + "• Tự kiểm tra bản mới: \(s.autoCheckUpdates ? "bật" : "TẮT")"
@@ -468,10 +470,13 @@ final class TransferModel: ObservableObject {
             text += "\n\n\(imported.droppedMacros) gõ tắt bị bỏ vì có ký tự điều khiển (như xuống dòng) hoặc quá dài."
         }
         // Chỉ đếm số mục thì không thấy được mục kiểu "ls → curl … | sh", nên liệt kê từng mục, đánh dấu mục giống lệnh shell.
-        let shell = CharacterSet(charactersIn: "|;&$`<>#")
-        let suspicious = s.macros.filter { $0.text.rangeOfCharacter(from: shell) != nil }
+        // Mục dài hay có nhiều dấu cách liền nhau cũng bị đánh dấu: chúng có thể đẩy phần lệnh ra khỏi chỗ người đọc nhìn.
+        let shell = CharacterSet(charactersIn: "|;&$`<>#/~")
+        let suspicious = s.macros.filter {
+            $0.text.rangeOfCharacter(from: shell) != nil || $0.text.count > 120 || $0.text.contains("   ")
+        }
         if !suspicious.isEmpty {
-            text += "\n\n⚠️ \(suspicious.count) gõ tắt có ký tự hay dùng trong lệnh Terminal (| ; & $ ` < > #). Đọc kỹ danh sách bên dưới."
+            text += "\n\n⚠️ \(suspicious.count) gõ tắt dài, có nhiều dấu cách liền nhau hoặc có ký tự hay dùng trong lệnh Terminal (| ; & $ ` < > # / ~). Đọc kỹ danh sách bên dưới."
         }
         text += "\n\nChỉ nhập file bạn tin."
         let alert = NSAlert()
@@ -480,8 +485,7 @@ final class TransferModel: ObservableObject {
         if !s.macros.isEmpty {
             let list = s.macros.map { m -> String in
                 let flag = suspicious.contains(m) ? "⚠️ " : ""
-                let shown = m.text.count > 120 ? m.text.prefix(120) + "…" : Substring(m.text)
-                return "\(flag)\(m.abbreviation) → \(shown)"
+                return "\(flag)\(m.abbreviation) → \(m.text)"
             }.joined(separator: "\n")
             let scroll = NSTextView.scrollableTextView()
             scroll.frame = NSRect(x: 0, y: 0, width: 440, height: 160)
