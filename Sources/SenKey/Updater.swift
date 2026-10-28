@@ -11,6 +11,7 @@ final class Updater {
     static let requirement = #"=identifier "vn.senkey.app" and certificate leaf = H"e90227565deafdcd07f260406f4934fe32ed72d6""#
     private static let latestURL = URL(string: "https://api.github.com/repos/tdHuy22/SenKey/releases/latest")!
     private static let releasesPage = URL(string: "https://github.com/tdHuy22/SenKey/releases/latest")!
+    private static let downloadPrefix = "https://github.com/tdHuy22/SenKey/releases/download/"
     private static let lastCheckKey = "SenKey.update.lastCheck"
 
     private var busy = false
@@ -86,7 +87,8 @@ final class Updater {
     // MARK: - Cài đặt
 
     private func install(_ release: Release) {
-        guard let asset = release.assets.first(where: { $0.name == "SenKey.zip" }) else {
+        guard let asset = release.assets.first(where: { $0.name == "SenKey.zip" }),
+              asset.browserDownloadUrl.absoluteString.hasPrefix(Self.downloadPrefix) else {
             NSWorkspace.shared.open(release.htmlUrl)
             return
         }
@@ -106,13 +108,14 @@ final class Updater {
         }
         busy = true
         Log.add("Tải \(release.tagName)")
+        let running = currentVersion
         URLSession.shared.downloadTask(with: asset.browserDownloadUrl) { file, _, error in
             // File tải về bị xoá khi hàm này trả về, nên chuyển đi ngay trên luồng này.
             var prepared: URL?
             var problem = error?.localizedDescription ?? "tải không thành công"
             if let file {
                 do {
-                    prepared = try Self.unpackAndVerify(zip: file)
+                    prepared = try Self.unpackAndVerify(zip: file, tag: release.tagName, running: running)
                 } catch {
                     problem = error.localizedDescription
                 }
@@ -134,8 +137,8 @@ final class Updater {
         init(_ message: String) { errorDescription = message }
     }
 
-    /// Giải nén vào thư mục tạm riêng và kiểm chữ ký. Trả về đường dẫn SenKey.app đã kiểm.
-    private static func unpackAndVerify(zip: URL) throws -> URL {
+    /// Giải nén vào thư mục tạm riêng, kiểm chữ ký và phiên bản. Trả về đường dẫn SenKey.app đã kiểm.
+    private static func unpackAndVerify(zip: URL, tag: String, running: String) throws -> URL {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent("SenKey-update-\(UUID().uuidString)")
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -148,6 +151,12 @@ final class Updater {
         let app = out.appendingPathComponent("SenKey.app")
         guard verify(app) else {
             throw UpdateError("Bản tải về không mang chữ ký của SenKey nên không được cài.")
+        }
+        // Bản cũ cũng mang chữ ký hợp lệ: release mới mà chứa zip bản cũ thì là hạ cấp, không cài (TM-11).
+        let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+        let version = info?["CFBundleShortVersionString"] as? String ?? ""
+        guard AppVersion.isUpgrade(bundle: version, tag: tag, running: running) else {
+            throw UpdateError("Bản tải về là \(version.isEmpty ? "không rõ" : version), không khớp \(tag) nên không được cài.")
         }
         return app
     }
@@ -164,13 +173,15 @@ final class Updater {
         return designated.map { String($0) } == "designated => " + String(requirement.dropFirst())
     }
 
-    /// Chờ SenKey thoát rồi thay app: chép bản mới cạnh bản cũ trước, đổi chỗ sau cùng, lỗi thì mở lại bản cũ.
+    /// Chờ SenKey thoát rồi thay app: chép bản mới cạnh bản cũ trước, kiểm lại chữ ký của bản đã chép (thư mục tạm
+    /// có thể bị sửa sau lần kiểm đầu, TM-6), đổi chỗ sau cùng; lỗi thì mở lại bản cũ.
     private func replaceAndRelaunch(current: URL, with newApp: URL) {
         let script = """
         while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
         rm -rf "$3.new" "$3.old"
         if ! ditto "$2" "$3.new"; then rm -rf "$3.new"; open "$3"; exit 1; fi
         xattr -dr com.apple.quarantine "$3.new" 2>/dev/null
+        if ! /usr/bin/codesign --verify --strict --deep -R "$5" "$3.new" 2>/dev/null; then rm -rf "$3.new" "$4"; open "$3"; exit 1; fi
         mv "$3" "$3.old" && mv "$3.new" "$3" && rm -rf "$3.old"
         [ -d "$3" ] || mv "$3.old" "$3"
         open "$3"
@@ -179,7 +190,7 @@ final class Updater {
         let tmp = newApp.deletingLastPathComponent().deletingLastPathComponent()
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
-        p.arguments = ["-c", script, "senkey-update", String(getpid()), newApp.path, current.path, tmp.path]
+        p.arguments = ["-c", script, "senkey-update", String(getpid()), newApp.path, current.path, tmp.path, Self.requirement]
         do {
             try p.run()
         } catch {

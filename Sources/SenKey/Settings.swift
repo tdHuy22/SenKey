@@ -98,6 +98,7 @@ struct StoredSettings: Codable, Equatable {
     var autoCapitalize = false
     var macrosEnabled = true
     var macrosInEnglish = true
+    var macrosInTerminals = false
     var macros: [Macro] = []
     var autoCheckUpdates = true
 
@@ -106,7 +107,7 @@ struct StoredSettings: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case defaultMethod, vietnameseByDefault, modernToneStyle, autoRestoreEnglish, hotkey, customHotkey, rules
         case quickTelex, quickStartConsonant, quickEndConsonant, escRestore, tempEnglishKey, autoCapitalize
-        case macrosEnabled, macrosInEnglish, macros, autoCheckUpdates
+        case macrosEnabled, macrosInEnglish, macrosInTerminals, macros, autoCheckUpdates
     }
 
     init(from decoder: Decoder) throws {
@@ -120,7 +121,7 @@ struct StoredSettings: Codable, Equatable {
         modernToneStyle = get(.modernToneStyle, d.modernToneStyle)
         autoRestoreEnglish = get(.autoRestoreEnglish, d.autoRestoreEnglish)
         hotkey = get(.hotkey, d.hotkey)
-        customHotkey = get(.customHotkey, d.customHotkey)
+        customHotkey = get(.customHotkey, d.customHotkey).sanitized ?? d.customHotkey
         rules = get(.rules, d.rules)
         quickTelex = get(.quickTelex, d.quickTelex)
         quickStartConsonant = get(.quickStartConsonant, d.quickStartConsonant)
@@ -130,6 +131,8 @@ struct StoredSettings: Codable, Equatable {
         autoCapitalize = get(.autoCapitalize, d.autoCapitalize)
         macrosEnabled = get(.macrosEnabled, d.macrosEnabled)
         macrosInEnglish = get(.macrosInEnglish, d.macrosInEnglish)
+        macrosInTerminals = get(.macrosInTerminals, d.macrosInTerminals)
+        // Mục không `isAllowed` vẫn giữ (gõ tắt nhiều dòng tạo ở 1.2.0) để người dùng tự sửa; bảng tra bỏ qua chúng.
         macros = get(.macros, d.macros)
         autoCheckUpdates = get(.autoCheckUpdates, d.autoCheckUpdates)
     }
@@ -150,6 +153,14 @@ final class Settings: ObservableObject {
         "com.microsoft.Excel",
     ]
 
+    /// Ứng dụng terminal: gõ tắt bung ở đây là gõ lệnh, và Enter của người dùng sẽ chạy nó (TM-9),
+    /// nên mặc định không bung gõ tắt trong các app này.
+    static let terminalApps: Set<String> = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
+        "com.mitchellh.ghostty", "net.kovidgoyal.kitty", "org.alacritty", "io.alacritty",
+        "com.github.wez.wezterm", "co.zeit.hyper", "org.tabby", "com.raphaelamorim.rio",
+    ]
+
     @Published var defaultMethod: InputMethodChoice { didSet { save() } }
     @Published var vietnameseByDefault: Bool { didSet { save() } }
     @Published var modernToneStyle: Bool { didSet { save() } }
@@ -165,6 +176,7 @@ final class Settings: ObservableObject {
     @Published var autoCapitalize: Bool { didSet { save() } }
     @Published var macrosEnabled: Bool { didSet { save() } }
     @Published var macrosInEnglish: Bool { didSet { save() } }
+    @Published var macrosInTerminals: Bool { didSet { save() } }
     @Published var macros: [Macro] { didSet { save() } }
     @Published var autoCheckUpdates: Bool { didSet { save() } }
 
@@ -191,6 +203,7 @@ final class Settings: ObservableObject {
         autoCapitalize = s.autoCapitalize
         macrosEnabled = s.macrosEnabled
         macrosInEnglish = s.macrosInEnglish
+        macrosInTerminals = s.macrosInTerminals
         macros = s.macros
         autoCheckUpdates = s.autoCheckUpdates
     }
@@ -212,6 +225,7 @@ final class Settings: ObservableObject {
         s.autoCapitalize = autoCapitalize
         s.macrosEnabled = macrosEnabled
         s.macrosInEnglish = macrosInEnglish
+        s.macrosInTerminals = macrosInTerminals
         s.macros = macros
         s.autoCheckUpdates = autoCheckUpdates
         return s
@@ -235,6 +249,7 @@ final class Settings: ObservableObject {
         autoCapitalize = s.autoCapitalize
         macrosEnabled = s.macrosEnabled
         macrosInEnglish = s.macrosInEnglish
+        macrosInTerminals = s.macrosInTerminals
         macros = s.macros
         autoCheckUpdates = s.autoCheckUpdates
         loading = false
@@ -256,13 +271,20 @@ final class Settings: ObservableObject {
         return try encoder.encode(stored)
     }
 
-    /// File phải là JSON cài đặt SenKey; file hỏng thì báo lỗi và cài đặt hiện tại giữ nguyên.
-    func importData(_ data: Data) throws {
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+    static let maxImportSize = 1_000_000
+
+    /// Đọc file cài đặt để người dùng xem trước rồi mới `apply` (TM-9). File phải là JSON cài đặt SenKey, không quá
+    /// `maxImportSize`; file hỏng thì báo lỗi. `droppedMacros`: số gõ tắt bị bỏ vì có ký tự điều khiển hoặc quá dài.
+    static func readImport(_ data: Data) throws -> (settings: StoredSettings, droppedMacros: Int) {
+        guard data.count <= maxImportSize,
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               object["defaultMethod"] != nil || object["rules"] != nil || object["macros"] != nil else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        apply(try JSONDecoder().decode(StoredSettings.self, from: data))
+        var settings = try JSONDecoder().decode(StoredSettings.self, from: data)
+        let raw = settings.macros.count
+        settings.macros = Array(settings.macros.filter(\.isAllowed).prefix(Macro.maxCount))
+        return (settings, raw - settings.macros.count)
     }
 
     // MARK: - Tra cứu
@@ -318,6 +340,7 @@ final class Settings: ObservableObject {
         c.autoCapitalize = autoCapitalize
         c.macros = macrosEnabled ? MacroExpander.table(macros) : [:]
         c.macrosInEnglish = macrosInEnglish
+        if !macrosInTerminals { c.noMacroApps = Self.terminalApps }
         return c
     }
 

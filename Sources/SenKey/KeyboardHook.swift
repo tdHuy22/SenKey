@@ -21,6 +21,8 @@ struct HookConfig {
     /// Gõ tắt: chữ viết tắt (chữ thường) → chữ thay thế. Rỗng = tắt.
     var macros: [String: String] = [:]
     var macrosInEnglish = true
+    /// Ứng dụng không bung gõ tắt (terminal, trừ khi người dùng bật).
+    var noMacroApps: Set<String> = []
 
     func method(for bundleID: String?) -> InputMethod? {
         if let id = bundleID, let m = appMethods[id] { return m }
@@ -272,6 +274,7 @@ final class KeyboardHook {
         // Space, dấu câu, Enter, Tab kết thúc từ: có thể phải sửa từ vừa gõ ("ủe" → "user") hoặc thay gõ tắt.
         let endsWord = unit >= 0x20 || unit == 0x0D || unit == 0x09 || unit == 0x03
         let triggersMacro = endsWord && !ch.isNumber && !config.macros.isEmpty
+            && !(contextID.map(config.noMacroApps.contains) ?? false)
 
         guard let method else {
             // Tiếng Anh: không thêm dấu, chỉ tra gõ tắt.
@@ -283,7 +286,7 @@ final class KeyboardHook {
             let word = String(plainWord)
             plainWord = []
             if triggersMacro && config.macrosInEnglish, let text = MacroExpander.expand(word, table: config.macros) {
-                return replace(EditResult(backspaces: word.count, text: text), thenRepost: event, proxy: proxy)
+                return expandMacro(EditResult(backspaces: word.count, text: text), endedBy: unit, event: event, proxy: proxy)
             }
             return pass
         }
@@ -306,7 +309,7 @@ final class KeyboardHook {
             if triggersMacro, let text = macroExpansion() {
                 let edit = EditResult(backspaces: engine.currentWord.count, text: text)
                 engine.reset()
-                return replace(edit, thenRepost: event, proxy: proxy)
+                return expandMacro(edit, endedBy: unit, event: event, proxy: proxy)
             }
             if endsWord, let finish = engine.finishWord() {
                 return replace(finish, thenRepost: event, proxy: proxy)
@@ -326,6 +329,17 @@ final class KeyboardHook {
         guard !engine.isEmpty else { return nil }
         return MacroExpander.expand(engine.currentWord, table: config.macros)
             ?? MacroExpander.expand(engine.typedKeys, table: config.macros)
+    }
+
+    /// Thay gõ tắt. Nếu Enter kích hoạt thì nuốt Enter: người dùng thấy chữ thay thế rồi mới bấm Enter lần nữa để gửi
+    /// hay chạy, nên một gõ tắt như `ls` → `curl … | sh` không thể tự chạy trong Terminal (TM-9).
+    private func expandMacro(_ edit: EditResult, endedBy unit: UInt16, event: CGEvent, proxy: CGEventTapProxy) -> Unmanaged<CGEvent>? {
+        if unit == 0x0D || unit == 0x03 {
+            send(edit, to: target(proxy: proxy))
+            capitalizer.reset()  // Enter chưa đi qua nên chữ kế tiếp vẫn cùng dòng
+            return nil
+        }
+        return replace(edit, thenRepost: event, proxy: proxy)
     }
 
     /// Sửa từ vừa gõ rồi gửi lại chính phím kết thúc từ, để phím đó chắc chắn đi sau phần sửa.

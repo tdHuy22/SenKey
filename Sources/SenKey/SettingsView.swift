@@ -110,8 +110,10 @@ private struct MacroTab: View {
                 Toggle("Bật gõ tắt", isOn: $settings.macrosEnabled)
                 Toggle("Dùng cả khi đang gõ tiếng Anh", isOn: $settings.macrosInEnglish)
                     .disabled(!settings.macrosEnabled)
+                Toggle("Dùng cả trong Terminal và app dòng lệnh khác", isOn: $settings.macrosInTerminals)
+                    .disabled(!settings.macrosEnabled)
             } footer: {
-                Text("Gõ chữ viết tắt rồi nhấn Space, dấu câu hoặc Enter để thay. Chữ hoa theo chữ đã gõ: ko → không, Ko → Không, KO → KHÔNG. Trong chữ thay thế, {date} và {time} là ngày giờ hiện tại.")
+                Text("Gõ chữ viết tắt rồi nhấn Space, dấu câu hoặc Enter để thay. Nếu nhấn Enter, chữ được thay nhưng Enter chưa gửi đi: xem lại rồi nhấn Enter lần nữa. Chữ hoa theo chữ đã gõ: ko → không, Ko → Không, KO → KHÔNG. Trong chữ thay thế, {date} và {time} là ngày giờ hiện tại.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Thêm mục mới") {
@@ -125,6 +127,9 @@ private struct MacroTab: View {
                 }
                 if draft.abbreviation.contains(where: { $0.isWhitespace }) {
                     Text("Chữ viết tắt không được có khoảng trắng.").font(.caption).foregroundStyle(.red)
+                } else if !Macro(abbreviation: draft.abbreviation, text: draft.text).isAllowed {
+                    Text("Viết tắt tối đa \(Macro.maxAbbreviationLength) ký tự, chữ thay thế tối đa \(Macro.maxTextLength) ký tự, không có ký tự điều khiển.")
+                        .font(.caption).foregroundStyle(.red)
                 } else if draft.abbreviation.contains(where: { !$0.isASCII }) {
                     Text("Nên dùng chữ không dấu (dc thay vì đc): khi gõ, chữ có dấu có thể không hiện đúng như vậy.")
                         .font(.caption).foregroundStyle(.orange)
@@ -141,6 +146,11 @@ private struct MacroTab: View {
                         TextField("", text: binding(macro.id, \.abbreviation))
                             .frame(width: 150)
                         TextField("", text: binding(macro.id, \.text))
+                        if !macro.isAllowed {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                                .help("Mục này đang tắt: có xuống dòng, Tab hay ký tự điều khiển, hoặc quá dài. Sửa lại để dùng.")
+                        }
                         Button {
                             settings.macros.removeAll { $0.id == macro.id }
                         } label: {
@@ -158,6 +168,7 @@ private struct MacroTab: View {
     private var canAdd: Bool {
         let a = draft.abbreviation.trimmingCharacters(in: .whitespaces)
         return !a.isEmpty && !a.contains(where: { $0.isWhitespace }) && !draft.text.isEmpty
+            && Macro(abbreviation: a, text: draft.text).isAllowed
     }
 
     private func add() {
@@ -404,7 +415,7 @@ private struct SystemTab: View {
             Section {
                 Button("Báo lỗi…") { actions.reportBug() }
             } footer: {
-                Text("Mở trang báo lỗi trên GitHub và chép sẵn thông tin máy, cài đặt chung và nhật ký sự kiện vào clipboard. Không gồm phím bạn gõ hay nội dung gõ tắt.")
+                Text("Mở trang báo lỗi trên GitHub và chép sẵn thông tin máy, cài đặt chung (cả tên các ứng dụng có cài đặt riêng) và nhật ký sự kiện vào clipboard. Không gồm phím bạn gõ hay nội dung gõ tắt. Xem lại trước khi gửi.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -436,12 +447,57 @@ final class TransferModel: ObservableObject {
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        let imported: (settings: StoredSettings, droppedMacros: Int)
         do {
-            try settings.importData(Data(contentsOf: url))
-            report("Đã nhập cài đặt từ \(url.lastPathComponent).", failed: false)
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= Settings.maxImportSize else { throw CocoaError(.fileReadTooLarge) }
+            imported = try Settings.readImport(Data(contentsOf: url))
         } catch {
             report("File không phải cài đặt SenKey hợp lệ. Cài đặt hiện tại giữ nguyên.", failed: true)
+            return
         }
+        // Gõ tắt trong file sẽ được SenKey gõ ra ở mọi app, nên cho người dùng thấy file làm gì trước khi áp dụng (TM-9, TM-10).
+        let s = imported.settings
+        let hotkey = s.hotkey == .custom ? s.customHotkey.displayName : s.hotkey.displayName
+        var text = "Cài đặt hiện tại sẽ bị thay bằng nội dung file:\n"
+            + "• \(s.macros.count) gõ tắt\(s.macrosInEnglish ? ", chạy cả khi gõ tiếng Anh" : "")\(s.macrosInTerminals ? ", CHẠY CẢ TRONG TERMINAL" : "")\n"
+            + "• \(s.rules.count) ứng dụng có cài đặt riêng\n"
+            + "• Phím tắt đảo Việt/Anh: \(hotkey)\n"
+            + "• Tự kiểm tra bản mới: \(s.autoCheckUpdates ? "bật" : "TẮT")"
+        if imported.droppedMacros > 0 {
+            text += "\n\n\(imported.droppedMacros) gõ tắt bị bỏ vì có ký tự điều khiển (như xuống dòng) hoặc quá dài."
+        }
+        // Chỉ đếm số mục thì không thấy được mục kiểu "ls → curl … | sh", nên liệt kê từng mục, đánh dấu mục giống lệnh shell.
+        let shell = CharacterSet(charactersIn: "|;&$`<>#")
+        let suspicious = s.macros.filter { $0.text.rangeOfCharacter(from: shell) != nil }
+        if !suspicious.isEmpty {
+            text += "\n\n⚠️ \(suspicious.count) gõ tắt có ký tự hay dùng trong lệnh Terminal (| ; & $ ` < > #). Đọc kỹ danh sách bên dưới."
+        }
+        text += "\n\nChỉ nhập file bạn tin."
+        let alert = NSAlert()
+        alert.messageText = "Nhập cài đặt từ \(url.lastPathComponent)?"
+        alert.informativeText = text
+        if !s.macros.isEmpty {
+            let list = s.macros.map { m -> String in
+                let flag = suspicious.contains(m) ? "⚠️ " : ""
+                let shown = m.text.count > 120 ? m.text.prefix(120) + "…" : Substring(m.text)
+                return "\(flag)\(m.abbreviation) → \(shown)"
+            }.joined(separator: "\n")
+            let scroll = NSTextView.scrollableTextView()
+            scroll.frame = NSRect(x: 0, y: 0, width: 440, height: 160)
+            scroll.hasVerticalScroller = true
+            if let view = scroll.documentView as? NSTextView {
+                view.string = list
+                view.isEditable = false
+                view.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+            }
+            alert.accessoryView = scroll
+        }
+        alert.addButton(withTitle: "Áp dụng")
+        alert.addButton(withTitle: "Huỷ")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        settings.apply(s)
+        report("Đã nhập cài đặt từ \(url.lastPathComponent).", failed: false)
     }
 
     private func report(_ text: String, failed: Bool) {

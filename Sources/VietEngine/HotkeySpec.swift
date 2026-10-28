@@ -27,6 +27,14 @@ public struct HotkeySpec: Codable, Equatable {
         return [Self.shift, Self.control, Self.option, Self.command].filter { modifiers & $0 != 0 }.count >= 2
     }
 
+    /// Phím tắt đọc từ file hay UserDefaults (bộ giải mã tự sinh không qua `init`): lọc bit bổ trợ lạ, nhãn bỏ ký tự
+    /// điều khiển và tối đa 16 ký tự. Không hợp lệ thì nil, vì phím tắt như Return trơn sẽ nuốt phím đó toàn hệ thống (TM-10).
+    public var sanitized: HotkeySpec? {
+        let label = String(keyLabel.filter { !Macro.hasControl(String($0)) }.prefix(16))
+        let s = HotkeySpec(keyCode: keyCode, modifiers: modifiers, keyLabel: label)
+        return s.isValid ? s : nil
+    }
+
     public var displayName: String {
         var s = ""
         if modifiers & Self.control != 0 { s += "⌃" }
@@ -44,6 +52,11 @@ public struct HotkeySpec: Codable, Equatable {
 
 /// So sánh số phiên bản dạng "1.2.3" hoặc "v1.2.3".
 public enum AppVersion {
+    /// Bản tải về chỉ được cài khi phiên bản trong app đúng bằng tag của release và mới hơn bản đang chạy (TM-11).
+    public static func isUpgrade(bundle: String, tag: String, running: String) -> Bool {
+        !bundle.isEmpty && !isNewer(bundle, than: tag) && !isNewer(tag, than: bundle) && isNewer(bundle, than: running)
+    }
+
     public static func parse(_ s: String) -> [Int] {
         let trimmed = s.hasPrefix("v") || s.hasPrefix("V") ? String(s.dropFirst()) : s
         return trimmed.split(separator: ".").map { Int($0.prefix(while: { $0.isNumber })) ?? 0 }

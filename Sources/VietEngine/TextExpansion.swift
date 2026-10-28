@@ -10,14 +10,31 @@ public struct Macro: Codable, Equatable, Identifiable {
         self.abbreviation = abbreviation
         self.text = text
     }
+
+    public static let maxAbbreviationLength = 32
+    public static let maxTextLength = 2000
+    public static let maxCount = 2000
+
+    /// SenKey gõ chữ thay thế vào app đang mở, kể cả Terminal, nên mục đến từ file nhập hay UserDefaults
+    /// không được chứa ký tự điều khiển (`\r` là Enter, ESC…) hay ngắt dòng, và không được quá dài (TM-9).
+    /// Độ dài đếm theo Unicode scalar: đếm theo ký tự thì một chữ kèm hàng nghìn dấu kết hợp vẫn chỉ tính là 1.
+    public var isAllowed: Bool {
+        abbreviation.unicodeScalars.count <= Self.maxAbbreviationLength && text.unicodeScalars.count <= Self.maxTextLength
+            && !Self.hasControl(abbreviation) && !Self.hasControl(text)
+    }
+
+    public static func hasControl(_ s: String) -> Bool {
+        s.unicodeScalars.contains { [.control, .lineSeparator, .paragraphSeparator].contains($0.properties.generalCategory) }
+    }
 }
 
 /// Tra và dựng chữ thay thế. Không phụ thuộc AppKit nên kiểm thử được độc lập.
 public enum MacroExpander {
-    /// Bảng tra: chữ viết tắt (chữ thường) → chữ thay thế. Mục trống hoặc có khoảng trắng bị bỏ qua.
+    /// Bảng tra: chữ viết tắt (chữ thường) → chữ thay thế. Mục trống, có khoảng trắng hoặc không `isAllowed` bị bỏ qua;
+    /// chỉ lấy `Macro.maxCount` mục đầu.
     public static func table(_ macros: [Macro]) -> [String: String] {
         var t: [String: String] = [:]
-        for m in macros {
+        for m in macros.prefix(Macro.maxCount) where m.isAllowed {
             let key = m.abbreviation.lowercased()
             if !key.isEmpty, !m.text.isEmpty, !key.contains(where: { $0.isWhitespace }) { t[key] = m.text }
         }

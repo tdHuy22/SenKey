@@ -59,7 +59,7 @@ enum BugReport {
         return out
     }
 
-    /// Báo cáo crash gần nhất của SenKey (chỉ 60 dòng đầu: loại lỗi, luồng hỏng).
+    /// Báo cáo crash gần nhất của SenKey, đã rút gọn bằng `crashSummary`.
     private static func latestCrash() -> (name: String, head: String)? {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports")
         guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])
@@ -68,7 +68,43 @@ enum BugReport {
         func date(_ u: URL) -> Date { (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast }
         guard let latest = crashes.max(by: { date($0) < date($1) }),
               let text = try? String(contentsOf: latest, encoding: .utf8) else { return nil }
-        return (latest.lastPathComponent, text.split(separator: "\n", omittingEmptySubsequences: false).prefix(60).joined(separator: "\n"))
+        return (latest.lastPathComponent, crashSummary(text))
+    }
+
+    /// Chỉ lấy các trường cho phép từ file .ips (dòng đầu là JSON tiêu đề, phần còn lại là JSON chi tiết): phiên bản,
+    /// loại lỗi, các frame của luồng hỏng. Bỏ định danh máy (crashReporterKey, modelCode…) và thay thư mục home bằng ~ (TM-12).
+    static func crashSummary(_ text: String) -> String {
+        func object(_ s: Substring) -> [String: Any]? {
+            (try? JSONSerialization.jsonObject(with: Data(s.utf8))) as? [String: Any]
+        }
+        func json(_ v: Any) -> String {
+            guard JSONSerialization.isValidJSONObject(v),
+                  let d = try? JSONSerialization.data(withJSONObject: v, options: [.sortedKeys]) else { return "\(v)" }
+            return String(decoding: d, as: UTF8.self)
+        }
+        let parts = text.split(separator: "\n", maxSplits: 1)
+        var out: [String] = []
+        if let header = parts.first.flatMap(object) {
+            for k in ["app_version", "build_version", "os_version", "timestamp", "bug_type"] {
+                if let v = header[k] { out.append("\(k): \(v)") }
+            }
+        }
+        if parts.count > 1, let body = object(parts[1]) {
+            for k in ["exception", "termination", "asi"] {
+                if let v = body[k] { out.append("\(k): \(json(v))") }
+            }
+            if let i = body["faultingThread"] as? Int, let threads = body["threads"] as? [[String: Any]], i < threads.count,
+               let frames = threads[i]["frames"] as? [[String: Any]] {
+                let images = body["usedImages"] as? [[String: Any]] ?? []
+                out.append("faultingThread \(i):")
+                for f in frames.prefix(20) {
+                    let image = (f["imageIndex"] as? Int).flatMap { $0 < images.count ? images[$0]["name"] as? String : nil } ?? "?"
+                    out.append("  \(image) \(f["symbol"] as? String ?? "?") +\(f["imageOffset"] ?? "?")")
+                }
+            }
+        }
+        if out.isEmpty { return "(không đọc được báo cáo crash)" }
+        return out.joined(separator: "\n").replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 
     static func open(settings: Settings, hookInstalled: Bool) {
