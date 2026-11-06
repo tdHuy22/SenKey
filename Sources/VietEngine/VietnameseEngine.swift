@@ -438,7 +438,8 @@ public final class VietnameseEngine {
     }
 
     private static let onsets: Set<String> = [
-        "", "b", "c", "ch", "d", "đ", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n", "ng", "ngh",
+        // "dz" không có trong chính tả chuẩn nhưng là cách viết quen của miền Nam (dzô, dzậy, dzui)
+        "", "b", "c", "ch", "d", "dz", "đ", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n", "ng", "ngh",
         "nh", "p", "ph", "q", "qu", "r", "s", "t", "th", "tr", "v", "x",
     ]
     private static let nuclei: Set<String> = [

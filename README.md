@@ -29,7 +29,7 @@ Telex · VNI · Simple Telex · VIQR · gõ tắt · kiểu gõ riêng cho từn
 | 🎯 **Riêng cho từng app** | VS Code gõ tiếng Anh, Messenger gõ Telex, Excel gõ VNI. SenKey tự nhớ |
 | 🚫 **Không marked text** | Không có chữ gạch chân, không lặp chữ kiểu `viêviệt` |
 | 🌐 **Sửa lỗi ô gợi ý** | Thanh địa chỉ Chrome / Safari / Firefox / Edge / Arc / Cốc Cốc, Spotlight, Raycast, Alfred, Excel |
-| 🔤 **Tự khôi phục tiếng Anh** | Từ điển 1.433 từ: `different`, `message`, `more`, `data` vẫn là chính nó. Từ trùng tiếng Việt (`this` → `thí`) thì nhấn **Esc** để lấy lại tiếng Anh |
+| 🔤 **Tự khôi phục tiếng Anh** | Từ điển 1.415 từ: `different`, `message`, `more`, `data` vẫn là chính nó. Từ trùng tiếng Việt (`this` → `thí`) thì nhấn **Esc** để lấy lại tiếng Anh |
 | 🔄 **Tự cập nhật** | Mỗi ngày hỏi GitHub một lần, kiểm chữ ký trước khi cài. Tắt được |
 | ⚡ **Siêu nhẹ** | Engine xử lý mỗi phím trong khoảng 1,2 µs, app nằm gọn trên menu bar |
 | 🛡️ **An toàn** | Tự gỡ bộ bắt phím trong 0,5 giây khi mất quyền Trợ năng, không làm treo máy |
